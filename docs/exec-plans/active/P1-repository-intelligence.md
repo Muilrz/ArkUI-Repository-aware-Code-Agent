@@ -7,7 +7,7 @@
 
 ## P1-A — Repository Scanner
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 在 `RepositoryWorkspace` 之上发现 target repository 中符合约定范围的文件，为后续数据模型与 semantic provider 提供稳定输入。

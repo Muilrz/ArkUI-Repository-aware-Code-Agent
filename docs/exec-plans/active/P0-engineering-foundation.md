@@ -1,6 +1,6 @@
 # P0 — Engineering Foundation
 
-- **Phase Status:** Not Started
+- **Phase Status:** Completed
 - **Phase Goal:** 建立 Repository Intelligence 可以安全复用的最小工程基础。
 - **Source of Truth:** `docs/architecture/technical-roadmap.md`
 - **Phase Boundary:** `docs/exec-plans/phase-map.md`
@@ -90,7 +90,7 @@ tests/unit/repository/test_workspace.py
 
 ## P0-B — Test / Fixture Foundation
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 

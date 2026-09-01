@@ -1,5 +1,11 @@
 """Repository workspace package."""
 
+from arkui_agent.repository.scanner import (
+    DEFAULT_EXCLUDED_DIRECTORIES,
+    RepositoryFileType,
+    RepositoryScanner,
+    classify_repository_path,
+)
 from arkui_agent.repository.workspace import (
     ARKUI_REPO_ROOT,
     RepositoryConfigurationError,
@@ -11,10 +17,13 @@ from arkui_agent.repository.workspace import (
 
 __all__ = [
     "ARKUI_REPO_ROOT",
+    "DEFAULT_EXCLUDED_DIRECTORIES",
     "RepositoryConfigurationError",
+    "RepositoryFileType",
     "RepositoryPathError",
     "RepositoryRootError",
+    "RepositoryScanner",
     "RepositoryWorkspace",
     "RepositoryWorkspaceError",
+    "classify_repository_path",
 ]
-
