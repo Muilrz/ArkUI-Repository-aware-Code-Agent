@@ -1,0 +1,36 @@
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+
+# Databases and generated indexes
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.index
+*.idx
+
+# Runtime data (retain only the directory placeholder)
+/var/*
+!/var/.gitkeep
+
+# Target-repository-derived build metadata
+compile_commands.json
+compile_flags.txt
+.cache/clangd/
+
