@@ -10,7 +10,7 @@ Agent 不仅基于关键词搜索源码，而是通过源码符号索引、Code 
 
 Task
 → Repository Intelligence
-→ Symbol / Test Retrieval
+→ Text / Symbol / Test Retrieval
 → Code Graph Expansion
 → Task Context Builder
 → Agent Runtime
@@ -54,12 +54,15 @@ Task
 
 支持基础查询能力：
 
+- 在 repository 边界内按文本 / 正则搜索源码内容
 - 根据组件定位源码目录
 - 根据类 / 函数定位声明与实现
 - 查询函数 Reference
 - 查询 Caller / Callee
 - 定位对应 Test Fixture / Test Case
 - 查找相似实现或相似测试
+
+文本检索用于字符串、宏、测试写法、错误文本等非 Symbol 场景；Symbol identity、Declaration、Definition、Reference、Caller / Callee 等 C++ 语义关系由 semantic retrieval 提供，namespace、class member、overload 等语义不通过纯文本匹配推断。
 
 Repository Intelligence 作为整个 Agent 的底层基础设施，不直接依赖 LLM。
 
@@ -172,6 +175,17 @@ Task Type = UT
 
 然后进行多路检索：
 
+### Text Retrieval
+
+检索：
+
+- Source Text
+- String Literal
+- Macro
+- Test Assertion Pattern
+- Error Text
+- Non-symbol Code Pattern
+
 ### Symbol Retrieval
 
 检索：
@@ -281,6 +295,7 @@ Agent State 保存：
 
 工具包括：
 
+- text_search
 - search_symbol
 - search_file
 - find_definition
@@ -483,6 +498,7 @@ Code Graph + Agent
 完成：
 
 - Repo Scanner
+- Repository Text Search
 - Symbol Extractor
 - File / Class / Function Index
 - Test Index
@@ -490,7 +506,8 @@ Code Graph + Agent
 
 目标是实现：
 
-输入一个 ArkUI Function，可以返回：
+- 在 repository 边界内执行受控文本检索
+- 输入一个 ArkUI Function，可以返回：
 
 - Declaration
 - Definition

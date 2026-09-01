@@ -38,8 +38,9 @@ P1 Repository Intelligence 是后续系统的底层基础设施，不依赖 LLM�
 
 ### 2.2 Separate Generic Code Facts from ArkUI Domain Knowledge
 
-P1 负责通用 repository / C++ facts，例如：
+P1 负责通用 repository / C++ facts 与受控文本检索能力，例如：
 
+- text match
 - symbol
 - declaration
 - definition
@@ -169,11 +170,14 @@ P0 完成时：
 
 P1 主要回答：
 
-> 给定一个 C++ symbol，它是什么、在哪里、谁引用/调用它、相关测试在哪里？
+> repository 中哪些位置匹配给定文本，以及给定一个 C++ symbol，它是什么、在哪里、谁引用/调用它、相关测试在哪里？
 
 ## In Scope
 
 - repository scanner
+- repository text search
+- exact / regex text lookup
+- path / file filtering
 - File / Symbol data model
 - C++ semantic provider abstraction
 - Clang/clangd semantic backend
@@ -202,9 +206,10 @@ P1 主要回答：
 
 ## Definition of Done
 
-在真实 ArkUI Ace Engine repository 上，对选定的一组代表性 symbols，系统可以稳定执行：
+在真实 ArkUI Ace Engine repository 上，对选定的一组代表性 repository queries 与 symbols，系统可以稳定执行：
 
 ```text
+text_search
 search_symbol
 find_declaration
 find_definition
@@ -224,6 +229,7 @@ find_tests
 6. Test Fixture / Test Case 可以作为一等实体查询。
 7. 至少在多个真实 ArkUI 组件上完成 integration validation。
 8. 有基础 retrieval benchmark 和错误分析。
+9. 文本检索受 repository boundary 约束，结果可追溯到 source location，且不用于替代 C++ semantic resolution。
 
 ## Milestones
 
@@ -236,6 +242,7 @@ find_tests
 - `P1-G` — Reference + Caller / Callee Retrieval
 - `P1-H` — Test Fixture / Test Case Index
 - `P1-I` — Real ArkUI Validation & Retrieval Baseline
+- `P1-J` — Repository Text Search
 
 # 5. P2 — ArkUI Code Graph
 
@@ -305,6 +312,7 @@ P3 回答：
 - Task schema
 - Task parser
 - Component / Target Symbol / Property / Action / Test Intent extraction
+- Text Retrieval
 - Symbol Retrieval
 - Reference Retrieval
 - Test Retrieval

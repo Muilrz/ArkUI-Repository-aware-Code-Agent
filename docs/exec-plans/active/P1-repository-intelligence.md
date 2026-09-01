@@ -1,7 +1,7 @@
 # P1 — Repository Intelligence
 
 - **Phase Status:** In Progress
-- **Phase Goal:** 建立不依赖 LLM 的 Repository Intelligence，使系统能够查询 C++ symbol、definition、reference、caller/callee 与 test mapping。
+- **Phase Goal:** 建立不依赖 LLM 的 Repository Intelligence，使系统能够执行受控源码文本检索，并查询 C++ symbol、definition、reference、caller/callee 与 test mapping。
 - **Source of Truth:** `docs/architecture/technical-roadmap.md`
 - **Phase Boundary:** `docs/exec-plans/phase-map.md`
 
@@ -87,7 +87,7 @@
 
 ## P1-C — C++ Semantic Provider Contract
 
-- **Status:** Completed
+- **Status:** Not Started
 
 ### Goal
 定义可替换的 C++ semantic backend 接口，使上层 Repository Intelligence 不依赖 clangd/Clang 的具体协议。
@@ -128,7 +128,7 @@ Provider contract 至少为后续能力预留：
 
 ## P1-D — Clang/clangd Semantic Backend
 
-- **Status:** Completed
+- **Status:** Not Started
 
 ### Goal
 实现第一个真实 C++ semantic provider backend。
@@ -305,9 +305,13 @@ compile database 应作为外部 repository/toolchain input 对待。
 ### Goal
 在真实 OpenHarmony ArkUI Ace Engine repository 上验收 P1，并建立后续优化所需 retrieval baseline。
 
+### Dependencies
+- P1-F / P1-G / P1-H completed
+- P1-J completed
+
 ### Scope
 - representative component selection
-- real symbol query set
+- real text / symbol query set
 - expected result annotation
 - retrieval metrics baseline
 - known failure taxonomy
@@ -328,6 +332,7 @@ P1 阶段不要求全部覆盖，可先选择 2-3 个完成 baseline，再扩展
 至少覆盖：
 
 ```text
+text_search
 search_symbol
 find_declaration
 find_definition
@@ -358,9 +363,80 @@ Call Chain Accuracy 的正式 domain trace 主要属于 P2，但 P1 可以记录
 7. 形成可重复运行的 baseline command 或 evaluation entry point。
 8. P1 Definition of Done 全部满足。
 
+## P1-J — Repository Text Search
+
+- **Status:** Not Started
+
+### Goal
+建立 repository-bound 的轻量级源码文本搜索能力，为后续 Task Retrieval 提供稳定的 Text Retrieval 基础。
+
+### Scope
+- repository text search abstraction
+- ripgrep backend
+- exact text search
+- regex search
+- repository-relative path filtering
+- file type / glob filtering
+- case sensitivity
+- configurable result limit
+- deterministic result ordering
+- source location / provenance
+- repository root boundary
+
+### Non-goals
+- C++ parsing
+- symbol identity
+- declaration / definition resolution
+- semantic reference resolution
+- caller / callee
+- retrieval ranking
+- Task Context construction
+- ArkUI domain knowledge
+
+### Dependencies
+- P0 completed
+- P1-A completed
+- P1-B completed
+
+P1-J 不依赖 P1-D / P1-E，可与后续 semantic milestones 并行实现；P1-I 验收与 P3 Text Retrieval 使用前必须完成。
+
+### Design Constraint
+上层暴露 repository text search abstraction，不暴露 ripgrep command contract。
+
+第一版使用 ripgrep (`rg`) 作为 backend，不要求同时实现 GNU grep fallback。文本检索只负责文本匹配，不通过匹配结果推断 C++ symbol identity 或 semantic relation。
+
+### Expected Capabilities
+至少支持：
+- query
+- exact / regex mode
+- case sensitivity
+- repository-relative path scope
+- file type / glob filtering
+- result limit
+
+结果至少包含：
+- repository-relative file
+- line
+- column
+- matched text / source range
+
+### Acceptance Criteria
+1. temporary repository 内可以执行文本搜索。
+2. exact text search 返回预期结果。
+3. regex search 返回预期结果。
+4. 支持 repository-relative path filtering。
+5. 支持 file type / glob filtering。
+6. 搜索范围不能逃逸 repository root。
+7. 支持限制最大结果数量。
+8. 结果排序稳定、可重复。
+9. 每个结果可追溯到 source location。
+10. ripgrep 不可用时返回明确 tooling/backend error。
+11. 文本匹配结果不用于替代 C++ semantic resolution。
+12. 有 unit tests 和 temporary repository integration tests。
+
 # P1 Definition of Done
 
-只有 P1-A 至 P1-I 全部 Completed，P1 才能标记 Completed。
+只有 P1-A 至 P1-J 全部 Completed，P1 才能标记 Completed。
 
 P1 完成后，系统应具备：
 
@@ -368,8 +444,8 @@ P1 完成后，系统应具备：
 C++ Repository
       ↓
 Repository Intelligence
-      ↓
-Symbol / Definition / Reference / Caller / Callee / Test
+      ├─ Text Search
+      └─ Symbol / Definition / Reference / Caller / Callee / Test
 ```
 
 并且整个链路不依赖 LLM。
