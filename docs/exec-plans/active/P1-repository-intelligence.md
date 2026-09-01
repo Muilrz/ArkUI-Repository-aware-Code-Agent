@@ -1,6 +1,6 @@
 # P1 — Repository Intelligence
 
-- **Phase Status:** Not Started
+- **Phase Status:** In Progress
 - **Phase Goal:** 建立不依赖 LLM 的 Repository Intelligence，使系统能够查询 C++ symbol、definition、reference、caller/callee 与 test mapping。
 - **Source of Truth:** `docs/architecture/technical-roadmap.md`
 - **Phase Boundary:** `docs/exec-plans/phase-map.md`

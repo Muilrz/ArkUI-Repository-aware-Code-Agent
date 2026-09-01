@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from arkui_agent.repository import (
     RepositoryFileType,
@@ -158,6 +159,24 @@ class RepositoryScannerTests(unittest.TestCase):
             paths = scanner.scan()
 
             self.assertNotIn(PurePosixPath("vendor/dependency.cpp"), paths)
+
+    def test_directory_enumeration_error_fails_the_scan(self) -> None:
+        with synthetic_cpp_repository() as repository:
+            scanner = RepositoryScanner(RepositoryWorkspace(repository.root))
+            error = PermissionError(
+                13,
+                "access denied",
+                str(repository.root / "restricted"),
+            )
+
+            with patch(
+                "arkui_agent.repository.scanner.os.scandir",
+                side_effect=error,
+            ):
+                with self.assertRaises(PermissionError) as raised:
+                    scanner.scan()
+
+            self.assertIs(raised.exception, error)
 
 
 if __name__ == "__main__":

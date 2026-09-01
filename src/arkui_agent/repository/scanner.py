@@ -102,6 +102,7 @@ class RepositoryScanner:
         for directory, directory_names, file_names in os.walk(
             self._workspace.root,
             topdown=True,
+            onerror=_raise_scan_error,
             followlinks=False,
         ):
             directory_path = Path(directory)
@@ -156,3 +157,8 @@ class RepositoryScanner:
             return False
         return resolved_path.is_dir()
 
+
+def _raise_scan_error(error: OSError) -> None:
+    """Fail the scan rather than returning an incomplete file list."""
+
+    raise error
