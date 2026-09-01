@@ -1,5 +1,10 @@
 """Repository workspace package."""
 
+from arkui_agent.repository.clangd import (
+    ClangdProtocolError,
+    ClangdSemanticProvider,
+    ClangdUnavailableError,
+)
 from arkui_agent.repository.model import (
     RepositoryFile,
     SourceLocation,
@@ -30,6 +35,9 @@ from arkui_agent.repository.workspace import (
 
 __all__ = [
     "ARKUI_REPO_ROOT",
+    "ClangdProtocolError",
+    "ClangdSemanticProvider",
+    "ClangdUnavailableError",
     "DEFAULT_EXCLUDED_DIRECTORIES",
     "RepositoryConfigurationError",
     "RepositoryFile",
