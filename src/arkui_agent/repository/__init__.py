@@ -14,6 +14,11 @@ from arkui_agent.repository.scanner import (
     RepositoryScanner,
     classify_repository_path,
 )
+from arkui_agent.repository.semantic import (
+    SemanticProvider,
+    SemanticProviderClosedError,
+    SemanticProviderError,
+)
 from arkui_agent.repository.workspace import (
     ARKUI_REPO_ROOT,
     RepositoryConfigurationError,
@@ -34,6 +39,9 @@ __all__ = [
     "RepositoryScanner",
     "RepositoryWorkspace",
     "RepositoryWorkspaceError",
+    "SemanticProvider",
+    "SemanticProviderClosedError",
+    "SemanticProviderError",
     "SourceLocation",
     "SourceRange",
     "Symbol",

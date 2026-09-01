@@ -87,7 +87,7 @@
 
 ## P1-C — C++ Semantic Provider Contract
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 定义可替换的 C++ semantic backend 接口，使上层 Repository Intelligence 不依赖 clangd/Clang 的具体协议。
