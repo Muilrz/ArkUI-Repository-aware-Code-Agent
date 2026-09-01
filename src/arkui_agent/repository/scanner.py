@@ -9,6 +9,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Final
 
+from arkui_agent.repository.model import RepositoryFile
 from arkui_agent.repository.workspace import (
     RepositoryPathError,
     RepositoryWorkspace,
@@ -87,7 +88,7 @@ class RepositoryScanner:
         include_patterns: Iterable[str] = (),
         exclude_patterns: Iterable[str] = (),
         file_types: Collection[RepositoryFileType] | None = None,
-    ) -> tuple[PurePosixPath, ...]:
+    ) -> tuple[RepositoryFile, ...]:
         """Return sorted canonical paths matching the requested filters.
 
         Glob patterns are matched against the complete repository-relative
@@ -97,7 +98,7 @@ class RepositoryScanner:
         includes = tuple(include_patterns)
         excludes = tuple(exclude_patterns)
         selected_types = None if file_types is None else frozenset(file_types)
-        discovered: list[PurePosixPath] = []
+        discovered: list[RepositoryFile] = []
 
         for directory, directory_names, file_names in os.walk(
             self._workspace.root,
@@ -140,9 +141,9 @@ class RepositoryScanner:
                     and classify_repository_path(canonical_path) not in selected_types
                 ):
                     continue
-                discovered.append(canonical_path)
+                discovered.append(RepositoryFile(canonical_path))
 
-        return tuple(sorted(discovered, key=PurePosixPath.as_posix))
+        return tuple(sorted(discovered, key=lambda file: file.path.as_posix()))
 
     def _should_descend(self, directory: Path) -> bool:
         if directory.name.casefold() in self._excluded_directories:

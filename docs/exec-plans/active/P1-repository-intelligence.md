@@ -48,7 +48,7 @@
 
 ## P1-B — File / Symbol Data Model
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 定义 P1 统一数据契约，使 scanner、semantic provider、index、retrieval 不通过私有结构互相耦合。

@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from arkui_agent.repository import (
+    RepositoryFile,
     RepositoryFileType,
     RepositoryScanner,
     RepositoryWorkspace,
@@ -19,16 +20,17 @@ class RepositoryScannerTests(unittest.TestCase):
         with synthetic_cpp_repository() as repository:
             scanner = RepositoryScanner(RepositoryWorkspace(repository.root))
 
-            paths = scanner.scan()
+            files = scanner.scan()
 
             self.assertEqual(
-                paths,
+                files,
                 tuple(
-                    PurePosixPath(path.as_posix())
+                    RepositoryFile.from_path(path)
                     for path in repository.relative_files
                 ),
             )
-            for path in paths:
+            for file in files:
+                path = file.path
                 self.assertIsInstance(path, PurePosixPath)
                 self.assertFalse(path.is_absolute())
                 self.assertNotIn("..", path.parts)
@@ -42,12 +44,12 @@ class RepositoryScannerTests(unittest.TestCase):
                 ignored_file.write_text("ignored", encoding="utf-8")
             scanner = RepositoryScanner(RepositoryWorkspace(repository.root))
 
-            paths = scanner.scan()
+            files = scanner.scan()
 
             self.assertEqual(
-                paths,
+                files,
                 tuple(
-                    PurePosixPath(path.as_posix())
+                    RepositoryFile.from_path(path)
                     for path in repository.relative_files
                 ),
             )
@@ -61,14 +63,17 @@ class RepositoryScannerTests(unittest.TestCase):
             private_source.write_text("private", encoding="utf-8")
             scanner = RepositoryScanner(RepositoryWorkspace(repository.root))
 
-            paths = scanner.scan(
+            files = scanner.scan(
                 include_patterns=("src/*",),
                 exclude_patterns=("src/internal/*",),
             )
 
             self.assertEqual(
-                paths,
-                (PurePosixPath("src/public.cpp"), PurePosixPath("src/widget.cpp")),
+                files,
+                (
+                    RepositoryFile.from_path("src/public.cpp"),
+                    RepositoryFile.from_path("src/widget.cpp"),
+                ),
             )
 
     def test_file_type_filter_uses_minimal_generic_classification(self) -> None:
@@ -79,19 +84,19 @@ class RepositoryScannerTests(unittest.TestCase):
 
             self.assertEqual(
                 scanner.scan(file_types={RepositoryFileType.HEADER}),
-                (PurePosixPath("include/fixture/widget.h"),),
+                (RepositoryFile.from_path("include/fixture/widget.h"),),
             )
             self.assertEqual(
                 scanner.scan(file_types={RepositoryFileType.SOURCE}),
-                (PurePosixPath("src/widget.cpp"),),
+                (RepositoryFile.from_path("src/widget.cpp"),),
             )
             self.assertEqual(
                 scanner.scan(file_types={RepositoryFileType.TEST}),
-                (PurePosixPath("tests/widget_test.cpp"),),
+                (RepositoryFile.from_path("tests/widget_test.cpp"),),
             )
             self.assertEqual(
                 scanner.scan(file_types={RepositoryFileType.OTHER}),
-                (PurePosixPath("README.md"),),
+                (RepositoryFile.from_path("README.md"),),
             )
 
     def test_classification_uses_paths_only(self) -> None:
@@ -126,7 +131,7 @@ class RepositoryScannerTests(unittest.TestCase):
             self.assertEqual(first_scan, second_scan)
             self.assertEqual(
                 first_scan,
-                tuple(sorted(first_scan, key=PurePosixPath.as_posix)),
+                tuple(sorted(first_scan, key=lambda file: file.path.as_posix())),
             )
 
     def test_scan_does_not_escape_workspace_root(self) -> None:
@@ -141,10 +146,12 @@ class RepositoryScannerTests(unittest.TestCase):
                     pass
                 scanner = RepositoryScanner(RepositoryWorkspace(repository.root))
 
-                paths = scanner.scan()
+                files = scanner.scan()
 
-                self.assertNotIn(PurePosixPath("outside-link/outside.cpp"), paths)
-                self.assertNotIn(PurePosixPath("outside.cpp"), paths)
+                self.assertNotIn(
+                    RepositoryFile.from_path("outside-link/outside.cpp"), files
+                )
+                self.assertNotIn(RepositoryFile.from_path("outside.cpp"), files)
 
     def test_excluded_directories_are_configurable(self) -> None:
         with synthetic_cpp_repository() as repository:
@@ -156,9 +163,11 @@ class RepositoryScannerTests(unittest.TestCase):
                 excluded_directories={"vendor"},
             )
 
-            paths = scanner.scan()
+            files = scanner.scan()
 
-            self.assertNotIn(PurePosixPath("vendor/dependency.cpp"), paths)
+            self.assertNotIn(
+                RepositoryFile.from_path("vendor/dependency.cpp"), files
+            )
 
     def test_directory_enumeration_error_fails_the_scan(self) -> None:
         with synthetic_cpp_repository() as repository:
