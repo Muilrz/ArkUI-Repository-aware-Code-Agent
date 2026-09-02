@@ -5,6 +5,13 @@ from arkui_agent.repository.clangd import (
     ClangdSemanticProvider,
     ClangdUnavailableError,
 )
+from arkui_agent.repository.index import (
+    SYMBOL_INDEX_FILENAME,
+    SymbolIndex,
+    SymbolIndexClosedError,
+    SymbolIndexError,
+    SymbolSemanticFacts,
+)
 from arkui_agent.repository.model import (
     RepositoryFile,
     SourceLocation,
@@ -50,10 +57,15 @@ __all__ = [
     "SemanticProvider",
     "SemanticProviderClosedError",
     "SemanticProviderError",
+    "SYMBOL_INDEX_FILENAME",
     "SourceLocation",
     "SourceRange",
     "Symbol",
     "SymbolIdentity",
+    "SymbolIndex",
+    "SymbolIndexClosedError",
+    "SymbolIndexError",
     "SymbolKind",
+    "SymbolSemanticFacts",
     "classify_repository_path",
 ]

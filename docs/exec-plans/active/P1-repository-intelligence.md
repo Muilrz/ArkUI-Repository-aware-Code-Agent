@@ -166,7 +166,7 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-E — Symbol Index
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 持久化 P1 repository facts，并提供稳定、可重建的基础 symbol query。
