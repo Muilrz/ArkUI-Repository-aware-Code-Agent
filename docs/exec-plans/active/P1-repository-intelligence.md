@@ -128,7 +128,7 @@ Provider contract 至少为后续能力预留：
 
 ## P1-D — Clang/clangd Semantic Backend
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 实现第一个真实 C++ semantic provider backend。

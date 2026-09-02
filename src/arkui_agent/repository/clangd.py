@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 from types import TracebackType
 from typing import NoReturn, Self
 from urllib.parse import urlparse
@@ -46,13 +50,16 @@ class _RequestError(ClangdProtocolError):
 class _JsonRpcTransport:
     """Synchronous JSON-RPC framing used only by the clangd adapter."""
 
-    def __init__(self, process: subprocess.Popen[bytes]) -> None:
+    def __init__(
+        self, process: subprocess.Popen[bytes], request_timeout: float
+    ) -> None:
         if process.stdin is None or process.stdout is None:
             raise ClangdProtocolError("clangd was started without protocol pipes.")
         self._process = process
         self._stdin = process.stdin
         self._stdout = process.stdout
         self._next_request_id = 1
+        self._request_timeout = request_timeout
 
     def request(self, method: str, params: object | None = None) -> object:
         request_id = self._next_request_id
@@ -65,9 +72,13 @@ class _JsonRpcTransport:
         if params is not None:
             message["params"] = params
         self._write(message)
+        deadline = time.monotonic() + self._request_timeout
 
         while True:
-            response = self._read()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._raise_timeout(method)
+            response = self._read_with_timeout(method, remaining)
             if "method" in response:
                 if "id" in response:
                     self._answer_server_request(response)
@@ -151,6 +162,49 @@ class _JsonRpcTransport:
             raise ClangdProtocolError("clangd returned a non-object JSON-RPC message.")
         return decoded
 
+    def _read_with_timeout(
+        self, method: str, remaining: float
+    ) -> dict[str, object]:
+        result: Queue[dict[str, object] | Exception] = Queue(maxsize=1)
+
+        def read_one_message() -> None:
+            try:
+                result.put(self._read())
+            except Exception as exc:
+                result.put(exc)
+
+        reader = Thread(target=read_one_message, daemon=True)
+        reader.start()
+        try:
+            response = result.get(timeout=remaining)
+        except Empty as exc:
+            self._raise_timeout(method, exc)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    def _raise_timeout(
+        self, method: str, cause: Exception | None = None
+    ) -> NoReturn:
+        self._abort_process()
+        error = ClangdProtocolError(
+            f"clangd request {method!r} timed out after "
+            f"{self._request_timeout:g} seconds."
+        )
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def _abort_process(self) -> None:
+        if self._process.poll() is not None:
+            return
+        self._process.terminate()
+        try:
+            self._process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
+            self._process.wait(timeout=1)
+
     def _raise_eof(self) -> NoReturn:
         raise ClangdProtocolError(
             f"clangd closed its output unexpectedly (exit code "
@@ -188,6 +242,7 @@ class ClangdSemanticProvider:
         executable: str | os.PathLike[str] = "clangd",
         compilation_database_directory: str | os.PathLike[str] | None = None,
         fallback_flags: tuple[str, ...] = (),
+        request_timeout: float = 10.0,
     ) -> None:
         self._workspace = workspace
         self._process: subprocess.Popen[bytes] | None = None
@@ -201,6 +256,7 @@ class ClangdSemanticProvider:
         compilation_directory = _validate_compilation_database_directory(
             compilation_database_directory
         )
+        validated_request_timeout = _validate_request_timeout(request_timeout)
         executable_path = shutil.which(os.fspath(executable))
         if executable_path is None:
             raise ClangdUnavailableError(
@@ -222,7 +278,9 @@ class ClangdSemanticProvider:
                 f"Unable to start clangd executable: {executable_path}"
             ) from exc
 
-        self._transport = _JsonRpcTransport(self._process)
+        self._transport = _JsonRpcTransport(
+            self._process, validated_request_timeout
+        )
         try:
             result = self._transport.request(
                 "initialize",
@@ -241,6 +299,7 @@ class ClangdSemanticProvider:
             self._transport.notify("initialized", {})
         except BaseException:
             self._terminate_process()
+            self._close_process_streams()
             self._closed = True
             raise
 
@@ -322,6 +381,9 @@ class ClangdSemanticProvider:
             process.wait(timeout=5)
         except (SemanticProviderError, subprocess.TimeoutExpired):
             self._terminate_process()
+        finally:
+            self._terminate_process()
+            self._close_process_streams()
 
     def __enter__(self) -> Self:
         self._require_open()
@@ -407,17 +469,23 @@ class ClangdSemanticProvider:
             position = _lsp_position(selection.get("start"))
             symbol_info = self._symbol_info(uri, position)
             qualified_name = _qualified_name(symbol_info, container_name, name)
-            identity_key = _identity_key(symbol_info, kind, qualified_name)
+            identity_key = _identity_key(
+                symbol_info, kind, qualified_name, uri, position
+            )
             identity = _opaque_symbol_identity(identity_key)
             fallback_range = _lsp_range_to_source_range(
                 self._workspace, uri, source_range, self._position_encoding
             )
             if fallback_range is None:
                 continue
-            declaration = self._location_query(
+            declaration = self._symbol_info_range(
+                symbol_info, "declarationRange"
+            ) or self._location_query(
                 "textDocument/declaration", uri, position
             )
-            definition = self._location_query("textDocument/definition", uri, position)
+            definition = self._symbol_info_range(
+                symbol_info, "definitionRange"
+            ) or self._location_query("textDocument/definition", uri, position)
             if declaration is None and definition is None:
                 declaration = fallback_range
             symbol = Symbol(
@@ -459,6 +527,16 @@ class ClangdSemanticProvider:
         if not isinstance(result, list) or not result or not isinstance(result[0], dict):
             return None
         return result[0]
+
+    def _symbol_info_range(
+        self, symbol_info: dict[str, object] | None, field: str
+    ) -> SourceRange | None:
+        return _symbol_info_location_to_range(
+            self._workspace,
+            symbol_info,
+            field,
+            self._position_encoding,
+        )
 
     def _location_query(
         self, method: str, uri: str, position: dict[str, int]
@@ -560,9 +638,15 @@ class ClangdSemanticProvider:
         position = _lsp_position(selection.get("start"))
         info = self._symbol_info(uri, position)
         qualified_name = _qualified_name(info, "", name)
-        identity = _opaque_symbol_identity(_identity_key(info, kind, qualified_name))
-        declaration = self._location_query("textDocument/declaration", uri, position)
-        definition = self._location_query("textDocument/definition", uri, position)
+        identity = _opaque_symbol_identity(
+            _identity_key(info, kind, qualified_name, uri, position)
+        )
+        declaration = self._symbol_info_range(
+            info, "declarationRange"
+        ) or self._location_query("textDocument/declaration", uri, position)
+        definition = self._symbol_info_range(
+            info, "definitionRange"
+        ) or self._location_query("textDocument/definition", uri, position)
         if declaration is None and definition is None:
             definition = fallback_range
         symbol = Symbol(
@@ -607,6 +691,17 @@ class ClangdSemanticProvider:
             process.kill()
             process.wait(timeout=5)
 
+    def _close_process_streams(self) -> None:
+        process = self._process
+        if process is None:
+            return
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None and not stream.closed:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+
 
 def _validate_compilation_database_directory(
     directory: str | os.PathLike[str] | None,
@@ -625,6 +720,16 @@ def _validate_compilation_database_directory(
             f"Compilation database path is not a directory: {directory!s}"
         )
     return resolved
+
+
+def _validate_request_timeout(request_timeout: float) -> float:
+    try:
+        timeout = float(request_timeout)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("clangd request timeout must be a number.") from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("clangd request timeout must be finite and greater than zero.")
+    return timeout
 
 
 def _language_id(path: Path) -> str:
@@ -672,6 +777,28 @@ def _lsp_range_to_source_range(
             end["line"] + 1,
             _model_column(lines, end, position_encoding),
         ),
+    )
+
+
+def _symbol_info_location_to_range(
+    workspace: RepositoryWorkspace,
+    symbol_info: dict[str, object] | None,
+    field: str,
+    position_encoding: str,
+) -> SourceRange | None:
+    if symbol_info is None:
+        return None
+    location = symbol_info.get(field)
+    if not isinstance(location, dict):
+        return None
+    uri = location.get("uri")
+    range_data = location.get("range")
+    if not isinstance(uri, str) or not isinstance(range_data, dict):
+        raise ClangdProtocolError(
+            f"clangd symbolInfo returned invalid {field} data."
+        )
+    return _lsp_range_to_source_range(
+        workspace, uri, range_data, position_encoding
     )
 
 
@@ -743,13 +870,23 @@ def _qualified_name(
 
 
 def _identity_key(
-    symbol_info: dict[str, object] | None, kind: SymbolKind, qualified_name: str
+    symbol_info: dict[str, object] | None,
+    kind: SymbolKind,
+    qualified_name: str,
+    uri: str,
+    position: dict[str, int],
 ) -> str:
     if symbol_info is not None:
         usr = symbol_info.get("usr")
         if isinstance(usr, str) and usr:
             return f"usr\0{usr}"
-    return f"fallback\0{kind.value}\0{qualified_name}"
+        clangd_id = symbol_info.get("id")
+        if isinstance(clangd_id, str) and clangd_id:
+            return f"clangd-id\0{clangd_id}"
+    return (
+        f"source-anchor\0{kind.value}\0{qualified_name}\0{uri}\0"
+        f"{position['line']}\0{position['character']}"
+    )
 
 
 def _opaque_symbol_identity(key: str) -> SymbolIdentity:

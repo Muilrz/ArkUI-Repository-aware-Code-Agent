@@ -2,21 +2,26 @@ from __future__ import annotations
 
 import io
 import json
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from arkui_agent.repository import (
     ClangdSemanticProvider,
+    ClangdProtocolError,
     ClangdUnavailableError,
     RepositoryWorkspace,
     SemanticProviderClosedError,
     SemanticProviderError,
     SymbolIdentity,
+    SymbolKind,
 )
 from arkui_agent.repository.clangd import (
+    _identity_key,
     _lsp_range_to_source_range,
     _opaque_symbol_identity,
+    _symbol_info_location_to_range,
 )
 from tests.fixtures.synthetic_cpp_repository import synthetic_cpp_repository
 
@@ -28,8 +33,8 @@ def _json_rpc_frame(message: dict[str, object]) -> bytes:
 
 class _LifecycleProcess:
     def __init__(self) -> None:
-        self.stdin = io.BytesIO()
-        self.stdout = io.BytesIO(
+        self.stdin = _InspectableBytesIO()
+        self.stdout = _InspectableBytesIO(
             _json_rpc_frame(
                 {
                     "jsonrpc": "2.0",
@@ -44,6 +49,7 @@ class _LifecycleProcess:
             )
             + _json_rpc_frame({"jsonrpc": "2.0", "id": 2, "result": None})
         )
+        self.stderr = None
         self.returncode: int | None = None
 
     def poll(self) -> int | None:
@@ -58,6 +64,53 @@ class _LifecycleProcess:
 
     def kill(self) -> None:
         self.returncode = -1
+
+
+class _InspectableBytesIO(io.BytesIO):
+    def close(self) -> None:
+        pass
+
+
+class _BlockingOutput:
+    def __init__(self) -> None:
+        self.closed = False
+        self._released = threading.Event()
+
+    def readline(self) -> bytes:
+        self._released.wait()
+        return b""
+
+    def read(self, length: int) -> bytes:
+        return b""
+
+    def close(self) -> None:
+        self.closed = True
+        self._released.set()
+
+    def release(self) -> None:
+        self._released.set()
+
+
+class _TimeoutProcess:
+    def __init__(self) -> None:
+        self.stdin = _InspectableBytesIO()
+        self.stdout = _BlockingOutput()
+        self.stderr = None
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        assert self.returncode is not None
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.returncode = 1
+        self.stdout.release()
+
+    def kill(self) -> None:
+        self.terminate()
 
 
 class ClangdAdapterTests(unittest.TestCase):
@@ -99,6 +152,78 @@ class ClangdAdapterTests(unittest.TestCase):
         self.assertIn(b'"method":"shutdown"', written)
         self.assertIn(b'"method":"exit"', written)
         self.assertIn(b'"fallbackFlags":["-std=c++17"]', written)
+
+    def test_request_timeout_aborts_unresponsive_clangd(self) -> None:
+        process = _TimeoutProcess()
+        with synthetic_cpp_repository() as repository:
+            with (
+                patch(
+                    "arkui_agent.repository.clangd.shutil.which",
+                    return_value="test-clangd",
+                ),
+                patch(
+                    "arkui_agent.repository.clangd.subprocess.Popen",
+                    return_value=process,
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ClangdProtocolError, "initialize.*timed out after 0.01 seconds"
+                ):
+                    ClangdSemanticProvider(
+                        RepositoryWorkspace(repository.root),
+                        request_timeout=0.01,
+                    )
+
+        self.assertEqual(process.returncode, 1)
+
+    def test_request_timeout_must_be_positive_and_finite(self) -> None:
+        with synthetic_cpp_repository() as repository:
+            for invalid_timeout in (0, -1, float("inf")):
+                with self.subTest(request_timeout=invalid_timeout):
+                    with self.assertRaisesRegex(
+                        ValueError, "finite and greater than zero"
+                    ):
+                        ClangdSemanticProvider(
+                            RepositoryWorkspace(repository.root),
+                            executable="not-consulted-for-invalid-timeout",
+                            request_timeout=invalid_timeout,
+                        )
+
+    def test_symbol_info_definition_range_is_preferred_semantic_fact(self) -> None:
+        with synthetic_cpp_repository() as repository:
+            workspace = RepositoryWorkspace(repository.root)
+            symbol_info = {
+                "usr": "c:@N@fixture@S@Widget@F@value#1",
+                "declarationRange": {
+                    "uri": repository.header.as_uri(),
+                    "range": {
+                        "start": {"line": 7, "character": 8},
+                        "end": {"line": 7, "character": 13},
+                    },
+                },
+                "definitionRange": {
+                    "uri": repository.source.as_uri(),
+                    "range": {
+                        "start": {"line": 4, "character": 12},
+                        "end": {"line": 4, "character": 17},
+                    },
+                },
+            }
+
+            declaration = _symbol_info_location_to_range(
+                workspace, symbol_info, "declarationRange", "utf-8"
+            )
+            definition = _symbol_info_location_to_range(
+                workspace, symbol_info, "definitionRange", "utf-8"
+            )
+
+            self.assertIsNotNone(declaration)
+            self.assertIsNotNone(definition)
+            assert declaration is not None and definition is not None
+            self.assertEqual(
+                declaration.file.path.as_posix(), "include/fixture/widget.h"
+            )
+            self.assertEqual(definition.file.path.as_posix(), "src/widget.cpp")
 
     def test_lsp_range_is_converted_to_one_based_repository_range(self) -> None:
         with synthetic_cpp_repository() as repository:
@@ -166,6 +291,24 @@ class ClangdAdapterTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotEqual(first, other)
         self.assertNotIn(usr, first.value)
+
+    def test_identity_fallback_does_not_collapse_overload_positions(self) -> None:
+        first = _identity_key(
+            None,
+            SymbolKind.FUNCTION,
+            "fixture::overloaded",
+            "file:///repo/fixture.cpp",
+            {"line": 4, "character": 4},
+        )
+        second = _identity_key(
+            None,
+            SymbolKind.FUNCTION,
+            "fixture::overloaded",
+            "file:///repo/fixture.cpp",
+            {"line": 8, "character": 4},
+        )
+
+        self.assertNotEqual(first, second)
 
     def test_missing_executable_has_clear_unavailable_error(self) -> None:
         with synthetic_cpp_repository() as repository:
