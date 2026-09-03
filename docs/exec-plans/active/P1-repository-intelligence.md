@@ -201,7 +201,7 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-F — Definition / Declaration Retrieval
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 建立稳定的 declaration / definition retrieval API。
