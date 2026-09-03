@@ -168,18 +168,29 @@ class TestFixture:
 
 @dataclass(frozen=True, slots=True)
 class TestCase:
-    """A discovered test case attached to one exact fixture identity."""
+    """A discovered test case attached to one exact fixture identity.
+
+    ``source_range`` preserves the case-name token provenance established by
+    H1. ``body_range`` is the optional, backend-neutral compound-statement
+    extent used for conservative semantic-reference containment.
+    """
 
     identity: SymbolIdentity
     display_name: str
     fixture_identity: SymbolIdentity
     source_range: SourceRange
+    body_range: SourceRange | None = None
 
     def __post_init__(self) -> None:
         if not self.display_name:
             raise ValueError("TestCase.display_name must not be empty.")
         if self.identity == self.fixture_identity:
             raise ValueError("TestCase identity must differ from fixture identity.")
+        if (
+            self.body_range is not None
+            and self.body_range.file != self.source_range.file
+        ):
+            raise ValueError("TestCase body_range must be in the source_range file.")
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -187,6 +198,9 @@ class TestCase:
             "display_name": self.display_name,
             "fixture_identity": self.fixture_identity.value,
             "source_range": self.source_range.to_dict(),
+            "body_range": (
+                None if self.body_range is None else self.body_range.to_dict()
+            ),
         }
 
 

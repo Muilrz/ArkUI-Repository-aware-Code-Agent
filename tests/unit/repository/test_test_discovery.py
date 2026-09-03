@@ -16,12 +16,12 @@ from tests.fixtures.synthetic_cpp_repository import synthetic_cpp_repository
 
 
 def text_at_range(source: str, source_range: SourceRange) -> str:
-    start = source_range.start
-    end = source_range.end
-    if start.line != end.line:
-        raise AssertionError("Test helper only supports single-line ranges")
-    line = source.splitlines()[start.line - 1]
-    return line[start.column - 1 : end.column - 1]
+    lines = source.splitlines(keepends=True)
+    start = sum(len(line) for line in lines[: source_range.start.line - 1])
+    start += source_range.start.column - 1
+    end = sum(len(line) for line in lines[: source_range.end.line - 1])
+    end += source_range.end.column - 1
+    return source[start:end]
 
 
 class TestMacroRecognizerTests(unittest.TestCase):
@@ -70,6 +70,45 @@ class TestMacroRecognizerTests(unittest.TestCase):
             "ValueIsTwentyOne",
         )
         self.assertEqual(discovered.cases[0].source_range.file, file)
+        self.assertIsNone(discovered.cases[0].body_range)
+
+    def test_body_range_is_complete_balanced_compound_statement(self) -> None:
+        source = """\
+HWTEST_F(WidgetTest, BalancedBody, TestSize.Level1)
+{
+    const char* ignored = "}";
+    const char* raw = R"tag(})tag";
+    if (true) { /* } */ use_symbol(); }
+}
+HWTEST_F(WidgetTest, AdjacentBody, TestSize.Level1)
+{
+    other_symbol();
+}
+"""
+
+        discovered = TestMacroRecognizer().recognize(
+            RepositoryFile.from_path("tests/widget_test.cpp"), source
+        )
+
+        first_body = discovered.cases[0].body_range
+        second_body = discovered.cases[1].body_range
+        self.assertIsNotNone(first_body)
+        self.assertIsNotNone(second_body)
+        assert first_body is not None and second_body is not None
+        self.assertEqual(
+            text_at_range(source, first_body),
+            "{\n    const char* ignored = \"}\";\n"
+            '    const char* raw = R"tag(})tag";\n'
+            "    if (true) { /* } */ use_symbol(); }\n}",
+        )
+        self.assertEqual(
+            text_at_range(source, second_body),
+            "{\n    other_symbol();\n}",
+        )
+        self.assertLess(
+            (first_body.end.line, first_body.end.column),
+            (second_body.start.line, second_body.start.column),
+        )
 
     def test_only_configured_fixture_style_macros_are_recognized(self) -> None:
         source = """\

@@ -55,6 +55,21 @@ class SymbolSemanticFacts:
             raise TypeError("SymbolSemanticFacts.callees must be a tuple.")
 
 
+@dataclass(frozen=True, slots=True)
+class TestedSymbolMapping:
+    """One proven direct test-to-symbol association and its exact references."""
+
+    test_case_identity: SymbolIdentity
+    symbol_identity: SymbolIdentity
+    references: tuple[SourceRange, ...]
+
+    def __post_init__(self) -> None:
+        if not self.references:
+            raise ValueError("TestedSymbolMapping requires reference provenance.")
+        if not isinstance(self.references, tuple):
+            raise TypeError("TestedSymbolMapping.references must be a tuple.")
+
+
 class SymbolIndex:
     """Persist and query exact P1 model facts using opaque symbol identities."""
 
@@ -172,6 +187,7 @@ class SymbolIndex:
             tuple[str, str, str, str, int, int, int, int]
         ] = []
         fixture_case_records: list[tuple[str, str]] = []
+        test_case_body_records: list[tuple[str, str, int, int, int, int]] = []
         for fixture in fixture_by_identity.values():
             file_set.add(fixture.source_range.file)
             test_entity_records.append(
@@ -195,6 +211,42 @@ class SymbolIndex:
             fixture_case_records.append(
                 (case.fixture_identity.value, case.identity.value)
             )
+            if case.body_range is not None:
+                file_set.add(case.body_range.file)
+                test_case_body_records.append(
+                    (
+                        case.identity.value,
+                        case.body_range.file.path.as_posix(),
+                        case.body_range.start.line,
+                        case.body_range.start.column,
+                        case.body_range.end.line,
+                        case.body_range.end.column,
+                    )
+                )
+
+        cases_by_file: dict[RepositoryFile, list[TestCase]] = {}
+        for case in case_by_identity.values():
+            if case.body_range is not None:
+                cases_by_file.setdefault(case.body_range.file, []).append(case)
+        test_symbol_reference_records: set[
+            tuple[str, str, str, int, int, int, int]
+        ] = set()
+        for symbol_identity, facts in facts_by_identity.items():
+            for reference in facts.references:
+                for case in cases_by_file.get(reference.file, ()):
+                    assert case.body_range is not None
+                    if _range_contains(case.body_range, reference):
+                        test_symbol_reference_records.add(
+                            (
+                                case.identity.value,
+                                symbol_identity.value,
+                                reference.file.path.as_posix(),
+                                reference.start.line,
+                                reference.start.column,
+                                reference.end.line,
+                                reference.end.column,
+                            )
+                        )
 
         try:
             self._storage.replace_all(
@@ -208,6 +260,10 @@ class SymbolIndex:
                 relations=tuple(sorted(relation_records)),
                 test_entities=tuple(sorted(test_entity_records)),
                 fixture_cases=tuple(sorted(fixture_case_records)),
+                test_case_bodies=tuple(sorted(test_case_body_records)),
+                test_symbol_references=tuple(
+                    sorted(test_symbol_reference_records)
+                ),
             )
         except SQLiteSymbolStorageError as exc:
             raise SymbolIndexError(str(exc)) from exc
@@ -363,6 +419,60 @@ class SymbolIndex:
         except SQLiteSymbolStorageError as exc:
             raise SymbolIndexError(str(exc)) from exc
 
+    def directly_referenced_symbols(
+        self, test_case_identity: SymbolIdentity
+    ) -> tuple[Symbol, ...]:
+        """Return exact symbols referenced within one indexed test-case body."""
+
+        self._require_open()
+        try:
+            return tuple(
+                self._symbol_from_row(row)
+                for row in self._storage.directly_referenced_symbols(
+                    test_case_identity.value
+                )
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def test_cases_for_symbol(
+        self, symbol_identity: SymbolIdentity
+    ) -> tuple[TestCase, ...]:
+        """Return test cases containing a direct reference to one exact symbol."""
+
+        self._require_open()
+        try:
+            return tuple(
+                _test_case_from_row(row)
+                for row in self._storage.test_cases_for_symbol(
+                    symbol_identity.value
+                )
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def tested_symbol_mappings_for_case(
+        self, test_case_identity: SymbolIdentity
+    ) -> tuple[TestedSymbolMapping, ...]:
+        """Return direct symbol mappings with deduplicated reference provenance."""
+
+        self._require_open()
+        return tuple(
+            self._tested_symbol_mapping(test_case_identity, symbol.identity)
+            for symbol in self.directly_referenced_symbols(test_case_identity)
+        )
+
+    def tested_symbol_mappings_for_symbol(
+        self, symbol_identity: SymbolIdentity
+    ) -> tuple[TestedSymbolMapping, ...]:
+        """Return associated test mappings with exact reference provenance."""
+
+        self._require_open()
+        return tuple(
+            self._tested_symbol_mapping(case.identity, symbol_identity)
+            for case in self.test_cases_for_symbol(symbol_identity)
+        )
+
     def close(self) -> None:
         if self._closed:
             return
@@ -399,6 +509,27 @@ class SymbolIndex:
             definition=ranges.get("definition"),
             parent_identity=_optional_identity(row["parent_identity"]),
             namespace_identity=_optional_identity(row["namespace_identity"]),
+        )
+
+    def _tested_symbol_mapping(
+        self,
+        test_case_identity: SymbolIdentity,
+        symbol_identity: SymbolIdentity,
+    ) -> TestedSymbolMapping:
+        try:
+            references = tuple(
+                _source_range_from_row(row)
+                for row in self._storage.test_symbol_references(
+                    test_case_identity.value,
+                    symbol_identity.value,
+                )
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+        return TestedSymbolMapping(
+            test_case_identity=test_case_identity,
+            symbol_identity=symbol_identity,
+            references=references,
         )
 
     def _require_open(self) -> None:
@@ -519,6 +650,17 @@ def _test_case_from_row(row: Any) -> TestCase:
         display_name=row["display_name"],
         fixture_identity=SymbolIdentity(row["fixture_identity"]),
         source_range=_source_range_from_row(row),
+        body_range=_optional_body_range_from_row(row),
+    )
+
+
+def _optional_body_range_from_row(row: Any) -> SourceRange | None:
+    if row["body_file_path"] is None:
+        return None
+    file = RepositoryFile.from_path(row["body_file_path"])
+    return SourceRange(
+        SourceLocation(file, row["body_start_line"], row["body_start_column"]),
+        SourceLocation(file, row["body_end_line"], row["body_end_column"]),
     )
 
 
@@ -530,6 +672,16 @@ def _range_sort_key(source_range: SourceRange) -> tuple[object, ...]:
         source_range.end.line,
         source_range.end.column,
     )
+
+
+def _range_contains(container: SourceRange, candidate: SourceRange) -> bool:
+    if container.file != candidate.file:
+        return False
+    container_start = (container.start.line, container.start.column)
+    container_end = (container.end.line, container.end.column)
+    candidate_start = (candidate.start.line, candidate.start.column)
+    candidate_end = (candidate.end.line, candidate.end.column)
+    return container_start <= candidate_start and candidate_end <= container_end
 
 
 def _identity_value(identity: SymbolIdentity | None) -> str | None:

@@ -205,6 +205,7 @@ class TestEntityContractTests(unittest.TestCase):
         self.file = RepositoryFile.from_path("tests/widget_test.cpp")
         self.fixture_range = source_range(self.file, 8, 10, 8, 20)
         self.case_range = source_range(self.file, 8, 22, 8, 38)
+        self.body_range = source_range(self.file, 9, 1, 12, 2)
         self.fixture = TestFixture(
             identity=SymbolIdentity("test:fixture:widget"),
             display_name="WidgetTest",
@@ -217,12 +218,17 @@ class TestEntityContractTests(unittest.TestCase):
             display_name="ValueIsTwentyOne",
             fixture_identity=self.fixture.identity,
             source_range=self.case_range,
+            body_range=self.body_range,
         )
 
         self.assertEqual(case.fixture_identity, self.fixture.identity)
         self.assertEqual(case.source_range.file, self.file)
+        self.assertEqual(case.body_range, self.body_range)
         json.dumps(self.fixture.to_dict())
-        json.dumps(case.to_dict())
+        record = case.to_dict()
+        json.dumps(record)
+        self.assertEqual(record["source_range"], self.case_range.to_dict())
+        self.assertEqual(record["body_range"], self.body_range.to_dict())
         with self.assertRaises(FrozenInstanceError):
             case.display_name = "Changed"  # type: ignore[misc]
 
@@ -235,6 +241,18 @@ class TestEntityContractTests(unittest.TestCase):
 
         self.assertNotEqual(self.fixture.identity, same_name.identity)
         self.assertNotEqual(self.fixture, same_name)
+
+    def test_case_body_must_share_the_case_token_file(self) -> None:
+        other_file = RepositoryFile.from_path("tests/other_test.cpp")
+
+        with self.assertRaisesRegex(ValueError, "body_range"):
+            TestCase(
+                identity=SymbolIdentity("test:case:widget:value"),
+                display_name="ValueIsTwentyOne",
+                fixture_identity=self.fixture.identity,
+                source_range=self.case_range,
+                body_range=source_range(other_file, 9, 1, 12, 2),
+            )
 
 
 if __name__ == "__main__":

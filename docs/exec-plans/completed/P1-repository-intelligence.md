@@ -1,6 +1,6 @@
 # P1 — Repository Intelligence
 
-- **Phase Status:** In Progress
+- **Phase Status:** Completed
 - **Phase Goal:** 建立不依赖 LLM 的 Repository Intelligence，使系统能够执行受控源码文本检索，并查询 C++ symbol、definition、reference、caller/callee 与 test mapping。
 - **Source of Truth:** `docs/architecture/technical-roadmap.md`
 - **Phase Boundary:** `docs/exec-plans/phase-map.md`
@@ -87,7 +87,7 @@
 
 ## P1-C — C++ Semantic Provider Contract
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 定义可替换的 C++ semantic backend 接口，使上层 Repository Intelligence 不依赖 clangd/Clang 的具体协议。
@@ -266,11 +266,12 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-H — Test Fixture / Test Case Index
 
-- **Status:** In Progress
+- **Status:** Completed
 
 ### Codex Task Status
 - `P1-H1 — Test Entity Discovery & Index`: Completed
-- Remaining P1-H scope, including tested-symbol mapping: Not Started
+- `P1-H2 — Tested-Symbol Mapping`: Completed
+- Required real-ArkUI H2 smoke: Completed
 
 ### Goal
 把 test fixture / test case 作为一等 repository entity，建立后续 UT Agent 所需 Test-first Retrieval 基础。
@@ -304,7 +305,11 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-I — Real ArkUI Validation & Retrieval Baseline
 
-- **Status:** Not Started
+- **Status:** Completed
+
+### Codex Task Status
+- `P1-I1 — Retrieval Baseline Harness`: Completed
+- `P1-I2 — Real ArkUI Benchmark & P1 Closure`: Completed
 
 ### Goal
 在真实 OpenHarmony ArkUI Ace Engine repository 上验收 P1，并建立后续优化所需 retrieval baseline。
@@ -367,9 +372,17 @@ Call Chain Accuracy 的正式 domain trace 主要属于 P2，但 P1 可以记录
 7. 形成可重复运行的 baseline command 或 evaluation entry point。
 8. P1 Definition of Done 全部满足。
 
+### Baseline Record
+- Suite: `benchmarks/p1/arkui-button-text-menu.json`
+- Revision: `0096f5bd943ed1f7fa56883aed0e2379f13c2885`
+- Components: Button, Text, Menu
+- Cases: 16; all eight required retrieval kinds covered
+- Metrics: Target File Recall `0.75`, Target Symbol Recall `0.875`, Recall@1/5/10 `1.0`, MRR `1.0`, Target Test Recall `0.0`, direct relation correctness `1.0`
+- Known failures retained: one empty reference result and three empty tested-symbol mappings, classified in the generated report
+
 ## P1-J — Repository Text Search
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 建立 repository-bound 的轻量级源码文本搜索能力，为后续 Task Retrieval 提供稳定的 Text Retrieval 基础。

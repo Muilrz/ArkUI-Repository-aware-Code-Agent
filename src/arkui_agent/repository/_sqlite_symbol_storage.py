@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SQLiteSymbolStorageError(RuntimeError):
@@ -92,6 +92,39 @@ CREATE TABLE IF NOT EXISTS test_fixture_cases (
     FOREIGN KEY (case_identity) REFERENCES test_entities(identity) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS test_case_bodies (
+    case_identity TEXT PRIMARY KEY,
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_column INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_column INTEGER NOT NULL,
+    FOREIGN KEY (case_identity) REFERENCES test_entities(identity) ON DELETE CASCADE,
+    FOREIGN KEY (file_path) REFERENCES files(path)
+);
+
+CREATE TABLE IF NOT EXISTS test_symbol_references (
+    case_identity TEXT NOT NULL,
+    symbol_identity TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_column INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_column INTEGER NOT NULL,
+    PRIMARY KEY (
+        case_identity,
+        symbol_identity,
+        file_path,
+        start_line,
+        start_column,
+        end_line,
+        end_column
+    ),
+    FOREIGN KEY (case_identity) REFERENCES test_entities(identity) ON DELETE CASCADE,
+    FOREIGN KEY (symbol_identity) REFERENCES symbols(identity) ON DELETE CASCADE,
+    FOREIGN KEY (file_path) REFERENCES files(path)
+);
+
 CREATE INDEX IF NOT EXISTS symbols_by_display_name
     ON symbols(display_name, qualified_name, identity);
 CREATE INDEX IF NOT EXISTS symbols_by_qualified_name
@@ -106,6 +139,14 @@ CREATE INDEX IF NOT EXISTS test_entities_by_kind_name
     ON test_entities(kind, display_name, file_path, start_line, start_column, identity);
 CREATE INDEX IF NOT EXISTS test_fixture_cases_by_fixture
     ON test_fixture_cases(fixture_identity, case_identity);
+CREATE INDEX IF NOT EXISTS test_symbol_references_by_case
+    ON test_symbol_references(
+        case_identity, symbol_identity, file_path, start_line, start_column
+    );
+CREATE INDEX IF NOT EXISTS test_symbol_references_by_symbol
+    ON test_symbol_references(
+        symbol_identity, case_identity, file_path, start_line, start_column
+    );
 """
 
 
@@ -142,9 +183,15 @@ class SQLiteSymbolStorage:
             tuple[str, str, str, str, int, int, int, int]
         ],
         fixture_cases: Sequence[tuple[str, str]],
+        test_case_bodies: Sequence[tuple[str, str, int, int, int, int]],
+        test_symbol_references: Sequence[
+            tuple[str, str, str, int, int, int, int]
+        ],
     ) -> None:
         try:
             with self._connection:
+                self._connection.execute("DELETE FROM test_symbol_references")
+                self._connection.execute("DELETE FROM test_case_bodies")
                 self._connection.execute("DELETE FROM test_fixture_cases")
                 self._connection.execute("DELETE FROM test_entities")
                 self._connection.execute("DELETE FROM symbol_relations")
@@ -226,6 +273,33 @@ class SQLiteSymbolStorage:
                     VALUES (?, ?)
                     """,
                     fixture_cases,
+                )
+                self._connection.executemany(
+                    """
+                    INSERT INTO test_case_bodies(
+                        case_identity,
+                        file_path,
+                        start_line,
+                        start_column,
+                        end_line,
+                        end_column
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    test_case_bodies,
+                )
+                self._connection.executemany(
+                    """
+                    INSERT INTO test_symbol_references(
+                        case_identity,
+                        symbol_identity,
+                        file_path,
+                        start_line,
+                        start_column,
+                        end_line,
+                        end_column
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    test_symbol_references,
                 )
         except sqlite3.Error as exc:
             raise SQLiteSymbolStorageError("Unable to rebuild symbol index.") from exc
@@ -330,10 +404,19 @@ class SQLiteSymbolStorage:
     def test_case(self, identity: str) -> sqlite3.Row | None:
         rows = self._query(
             """
-            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            SELECT
+                test_entities.*,
+                test_fixture_cases.fixture_identity,
+                test_case_bodies.file_path AS body_file_path,
+                test_case_bodies.start_line AS body_start_line,
+                test_case_bodies.start_column AS body_start_column,
+                test_case_bodies.end_line AS body_end_line,
+                test_case_bodies.end_column AS body_end_column
             FROM test_entities
             JOIN test_fixture_cases
               ON test_fixture_cases.case_identity = test_entities.identity
+            LEFT JOIN test_case_bodies
+              ON test_case_bodies.case_identity = test_entities.identity
             WHERE test_entities.identity = ? AND test_entities.kind = 'case'
             """,
             (identity,),
@@ -343,10 +426,19 @@ class SQLiteSymbolStorage:
     def test_cases_by_name(self, display_name: str) -> tuple[sqlite3.Row, ...]:
         return self._query(
             """
-            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            SELECT
+                test_entities.*,
+                test_fixture_cases.fixture_identity,
+                test_case_bodies.file_path AS body_file_path,
+                test_case_bodies.start_line AS body_start_line,
+                test_case_bodies.start_column AS body_start_column,
+                test_case_bodies.end_line AS body_end_line,
+                test_case_bodies.end_column AS body_end_column
             FROM test_entities
             JOIN test_fixture_cases
               ON test_fixture_cases.case_identity = test_entities.identity
+            LEFT JOIN test_case_bodies
+              ON test_case_bodies.case_identity = test_entities.identity
             WHERE test_entities.kind = 'case' AND test_entities.display_name = ?
             ORDER BY
                 test_entities.file_path,
@@ -362,10 +454,19 @@ class SQLiteSymbolStorage:
     ) -> tuple[sqlite3.Row, ...]:
         return self._query(
             """
-            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            SELECT
+                test_entities.*,
+                test_fixture_cases.fixture_identity,
+                test_case_bodies.file_path AS body_file_path,
+                test_case_bodies.start_line AS body_start_line,
+                test_case_bodies.start_column AS body_start_column,
+                test_case_bodies.end_line AS body_end_line,
+                test_case_bodies.end_column AS body_end_column
             FROM test_fixture_cases
             JOIN test_entities
               ON test_entities.identity = test_fixture_cases.case_identity
+            LEFT JOIN test_case_bodies
+              ON test_case_bodies.case_identity = test_entities.identity
             WHERE test_fixture_cases.fixture_identity = ?
             ORDER BY
                 test_entities.file_path,
@@ -374,6 +475,64 @@ class SQLiteSymbolStorage:
                 test_entities.identity
             """,
             (fixture_identity,),
+        )
+
+    def directly_referenced_symbols(
+        self, case_identity: str
+    ) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT DISTINCT symbols.*
+            FROM test_symbol_references
+            JOIN symbols
+              ON symbols.identity = test_symbol_references.symbol_identity
+            WHERE test_symbol_references.case_identity = ?
+            ORDER BY symbols.identity
+            """,
+            (case_identity,),
+        )
+
+    def test_cases_for_symbol(
+        self, symbol_identity: str
+    ) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT DISTINCT
+                test_entities.*,
+                test_fixture_cases.fixture_identity,
+                test_case_bodies.file_path AS body_file_path,
+                test_case_bodies.start_line AS body_start_line,
+                test_case_bodies.start_column AS body_start_column,
+                test_case_bodies.end_line AS body_end_line,
+                test_case_bodies.end_column AS body_end_column
+            FROM test_symbol_references
+            JOIN test_entities
+              ON test_entities.identity = test_symbol_references.case_identity
+            JOIN test_fixture_cases
+              ON test_fixture_cases.case_identity = test_entities.identity
+            LEFT JOIN test_case_bodies
+              ON test_case_bodies.case_identity = test_entities.identity
+            WHERE test_symbol_references.symbol_identity = ?
+            ORDER BY
+                test_entities.file_path,
+                test_entities.start_line,
+                test_entities.start_column,
+                test_entities.identity
+            """,
+            (symbol_identity,),
+        )
+
+    def test_symbol_references(
+        self, case_identity: str, symbol_identity: str
+    ) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT file_path, start_line, start_column, end_line, end_column
+            FROM test_symbol_references
+            WHERE case_identity = ? AND symbol_identity = ?
+            ORDER BY file_path, start_line, start_column, end_line, end_column
+            """,
+            (case_identity, symbol_identity),
         )
 
     def close(self) -> None:

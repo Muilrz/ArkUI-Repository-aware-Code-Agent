@@ -49,6 +49,9 @@ int DerivedWidget::doubled_value() const
 _TEST_SOURCE = """\
 #include "fixture/widget.h"
 
+#define HWTEST_F(fixture, name, level) void fixture##_##name()
+#define TEST_F(fixture, name) void fixture##_##name()
+
 class WidgetTest {};
 class AlternateWidgetTest {};
 

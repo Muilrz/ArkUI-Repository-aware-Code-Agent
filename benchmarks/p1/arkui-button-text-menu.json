@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "suite_id": "arkui-p1-button-text-menu",
+  "repository": "OpenHarmony/arkui_ace_engine",
+  "repository_revision": "0096f5bd943ed1f7fa56883aed0e2379f13c2885",
+  "cases": [
+    {
+      "id": "button-text-get-focus-pattern-definition",
+      "query": {
+        "kind": "text_search",
+        "text": "FocusPattern ButtonPattern::GetFocusPattern() const",
+        "path_scope": "frameworks/core/components_ng/pattern/button",
+        "file_globs": ["**/*.cpp"]
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/button/button_pattern.cpp"]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Exact signature inspected at button_pattern.cpp:157 in revision 0096f5bd; the scoped source search should identify that file."
+      }
+    },
+    {
+      "id": "button-search-get-focus-pattern",
+      "query": {
+        "kind": "search_symbol",
+        "name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern",
+        "match": "qualified_name"
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/button/button_pattern.cpp"],
+        "symbols": [
+          {
+            "identity": "symbol:4f661ec4e7250edf481c5c0577b61a79bfbff5ddd2b1228a1592c26cc3bf7e36",
+            "qualified_name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The unique qualified method and opaque semantic identity were checked through clangd after inspecting its declaration and definition."
+      }
+    },
+    {
+      "id": "button-find-get-focus-pattern-declaration",
+      "query": {
+        "kind": "find_declaration",
+        "symbol": {
+          "identity": "symbol:4f661ec4e7250edf481c5c0577b61a79bfbff5ddd2b1228a1592c26cc3bf7e36",
+          "qualified_name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/button/button_pattern.h"],
+        "symbols": [
+          {
+            "identity": "symbol:4f661ec4e7250edf481c5c0577b61a79bfbff5ddd2b1228a1592c26cc3bf7e36",
+            "qualified_name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Header declaration manually confirmed at button_pattern.h:192 and matched to the same semantic identity as the definition."
+      }
+    },
+    {
+      "id": "button-find-get-focus-pattern-definition",
+      "query": {
+        "kind": "find_definition",
+        "symbol": {
+          "identity": "symbol:4f661ec4e7250edf481c5c0577b61a79bfbff5ddd2b1228a1592c26cc3bf7e36",
+          "qualified_name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/button/button_pattern.cpp"],
+        "symbols": [
+          {
+            "identity": "symbol:4f661ec4e7250edf481c5c0577b61a79bfbff5ddd2b1228a1592c26cc3bf7e36",
+            "qualified_name": "OHOS::Ace::NG::ButtonPattern::GetFocusPattern"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Out-of-line definition manually confirmed at button_pattern.cpp:157 for the identity declared in button_pattern.h."
+      }
+    },
+    {
+      "id": "button-find-check-localized-border-callers",
+      "query": {
+        "kind": "find_callers",
+        "symbol": {
+          "identity": "symbol:32bb7ef349f3996433306d31c278050c63296a1f9577682d68901d21c064d937",
+          "qualified_name": "OHOS::Ace::NG::ButtonPattern::CheckLocalizedBorderRadiuses"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/button/button_pattern.cpp"],
+        "relations": [
+          {
+            "caller": {
+              "identity": "symbol:c37963eb4c60d5d9019f3ad8e3684b539632186d07a9cda809e0f171ec3b1d62",
+              "qualified_name": "OHOS::Ace::NG::ButtonPattern::OnModifyDone"
+            },
+            "callee": {
+              "identity": "symbol:32bb7ef349f3996433306d31c278050c63296a1f9577682d68901d21c064d937",
+              "qualified_name": "OHOS::Ace::NG::ButtonPattern::CheckLocalizedBorderRadiuses"
+            }
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Repository source search and body inspection show the private helper is directly called by ButtonPattern::OnModifyDone at button_pattern.cpp:737; clangd identities were checked separately."
+      }
+    },
+    {
+      "id": "button-find-set-builder-tests",
+      "query": {
+        "kind": "find_tests",
+        "symbol": {
+          "identity": "symbol:60e1fd3d556abd65bd25ceb3252d35899b7b27d87685d38517a35cb1ed5103a9",
+          "qualified_name": "OHOS::Ace::NG::ButtonPattern::SetBuilderFunc"
+        }
+      },
+      "expected": {
+        "files": ["test/unittest/core/pattern/button/button_content_modifier_two_test_ng.cpp"],
+        "tests": [
+          {
+            "identity": "test-entity:e5cfcb534e7933ef6bcddcd83261cdf1ad08043268df663f27d3e2eef3f613ab",
+            "display_name": "ButtonContentModifierTest027",
+            "file": "test/unittest/core/pattern/button/button_content_modifier_two_test_ng.cpp"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The case body at lines 333-367 directly invokes ButtonPattern::SetBuilderFunc at line 365; test identity comes from deterministic P1 test discovery."
+      }
+    },
+    {
+      "id": "text-text-create-layout-property-definition",
+      "query": {
+        "kind": "text_search",
+        "text": "RefPtr<LayoutProperty> TextPattern::CreateLayoutProperty()",
+        "path_scope": "frameworks/core/components_ng/pattern/text",
+        "file_globs": ["**/*.cpp"]
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/text/text_pattern.cpp"]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Exact out-of-line signature inspected at text_pattern.cpp:9075; the path and source glob intentionally bound the text query."
+      }
+    },
+    {
+      "id": "text-search-create-layout-property",
+      "query": {
+        "kind": "search_symbol",
+        "name": "OHOS::Ace::NG::TextPattern::CreateLayoutProperty",
+        "match": "qualified_name"
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/text/text_pattern.cpp"],
+        "symbols": [
+          {
+            "identity": "symbol:34cbd536850c5cf7cd0e68d57342b8aa8d2563e6060bfe3fee4739e56ba0bdf0",
+            "qualified_name": "OHOS::Ace::NG::TextPattern::CreateLayoutProperty"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The exact qualified override is unique in the selected Text files; opaque identity was checked with clangd against header and source facts."
+      }
+    },
+    {
+      "id": "text-find-create-layout-property-references",
+      "query": {
+        "kind": "find_references",
+        "symbol": {
+          "identity": "symbol:34cbd536850c5cf7cd0e68d57342b8aa8d2563e6060bfe3fee4739e56ba0bdf0",
+          "qualified_name": "OHOS::Ace::NG::TextPattern::CreateLayoutProperty"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/pattern.h"],
+        "symbols": [
+          {
+            "identity": "symbol:34cbd536850c5cf7cd0e68d57342b8aa8d2563e6060bfe3fee4739e56ba0bdf0",
+            "qualified_name": "OHOS::Ace::NG::TextPattern::CreateLayoutProperty"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Semantic inspection identifies the overridden Pattern::CreateLayoutProperty declaration at pattern.h:189 as the reference associated with this exact override identity."
+      }
+    },
+    {
+      "id": "text-find-content-host-callees",
+      "query": {
+        "kind": "find_callees",
+        "symbol": {
+          "identity": "symbol:0ced618ecbfd364b8e7813f2289045c6e724c4b8285534f1d2a0849bfa3ed2ef",
+          "qualified_name": "OHOS::Ace::NG::TextPattern::GetContentHost"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/text/text_pattern.cpp"],
+        "relations": [
+          {
+            "caller": {
+              "identity": "symbol:0ced618ecbfd364b8e7813f2289045c6e724c4b8285534f1d2a0849bfa3ed2ef",
+              "qualified_name": "OHOS::Ace::NG::TextPattern::GetContentHost"
+            },
+            "callee": {
+              "identity": "symbol:db876812206aa687c2f58a97d50368128a4deb4cb6dfbd779ce307b559d539ac",
+              "qualified_name": "OHOS::Ace::NG::Pattern::GetHost"
+            }
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The complete GetContentHost body at text_pattern.cpp:9070 directly returns GetHost(); semantic inspection confirms the exact Pattern::GetHost endpoint identity."
+      }
+    },
+    {
+      "id": "text-find-on-modify-tests",
+      "query": {
+        "kind": "find_tests",
+        "symbol": {
+          "identity": "symbol:6b9fe9cb53c327a20f1ca294eeeef34ed7fcad24aaf79ffee8bf1fe8d7fcad36",
+          "qualified_name": "OHOS::Ace::NG::TextPattern::OnModifyDone"
+        }
+      },
+      "expected": {
+        "files": ["test/unittest/core/pattern/text/text_pattern_test_ng.cpp"],
+        "tests": [
+          {
+            "identity": "test-entity:5d498bc1715fe6f921a2935c78365aa838c00d18b2bab1c8f55a19ac5fca73c3",
+            "display_name": "OnInjectionEventTest001",
+            "file": "test/unittest/core/pattern/text/text_pattern_test_ng.cpp"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The discovered case body at lines 2660-2708 directly calls the exact TextPattern instance's OnModifyDone at line 2683."
+      }
+    },
+    {
+      "id": "menu-text-on-attach-definition",
+      "query": {
+        "kind": "text_search",
+        "text": "void MenuPattern::OnAttachToFrameNode()",
+        "path_scope": "frameworks/core/components_ng/pattern/menu",
+        "file_globs": ["**/*.cpp"]
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/menu/menu_pattern.cpp"]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Exact MenuPattern definition signature inspected at menu_pattern.cpp:256 and scoped away from other menu pattern classes."
+      }
+    },
+    {
+      "id": "menu-search-on-attach",
+      "query": {
+        "kind": "search_symbol",
+        "name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode",
+        "match": "qualified_name"
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/menu/menu_pattern.cpp"],
+        "symbols": [
+          {
+            "identity": "symbol:2cf45228cb54ec358773b520f782039fac5f737bf437cc0e133f3f16c274899a",
+            "qualified_name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Qualified MenuPattern identity was inspected semantically to distinguish it from MenuItemPattern and MenuWrapperPattern methods with the same display name."
+      }
+    },
+    {
+      "id": "menu-find-on-attach-declaration",
+      "query": {
+        "kind": "find_declaration",
+        "symbol": {
+          "identity": "symbol:2cf45228cb54ec358773b520f782039fac5f737bf437cc0e133f3f16c274899a",
+          "qualified_name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/menu/menu_pattern.h"],
+        "symbols": [
+          {
+            "identity": "symbol:2cf45228cb54ec358773b520f782039fac5f737bf437cc0e133f3f16c274899a",
+            "qualified_name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Declaration at menu_pattern.h:895 was manually matched to the MenuPattern definition and exact clangd identity."
+      }
+    },
+    {
+      "id": "menu-find-on-attach-definition",
+      "query": {
+        "kind": "find_definition",
+        "symbol": {
+          "identity": "symbol:2cf45228cb54ec358773b520f782039fac5f737bf437cc0e133f3f16c274899a",
+          "qualified_name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode"
+        }
+      },
+      "expected": {
+        "files": ["frameworks/core/components_ng/pattern/menu/menu_pattern.cpp"],
+        "symbols": [
+          {
+            "identity": "symbol:2cf45228cb54ec358773b520f782039fac5f737bf437cc0e133f3f16c274899a",
+            "qualified_name": "OHOS::Ace::NG::MenuPattern::OnAttachToFrameNode"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "Definition at menu_pattern.cpp:256 was manually confirmed for the identity declared at menu_pattern.h:895."
+      }
+    },
+    {
+      "id": "menu-find-on-modify-tests",
+      "query": {
+        "kind": "find_tests",
+        "symbol": {
+          "identity": "symbol:91673368fa84bda7b1d474e18eaa5fbaa19fb20b98e851f834fd60d6bf6ca9a3",
+          "qualified_name": "OHOS::Ace::NG::MenuPattern::OnModifyDone"
+        }
+      },
+      "expected": {
+        "files": ["test/unittest/core/pattern/menu/menu_pattern_test_ng.cpp"],
+        "tests": [
+          {
+            "identity": "test-entity:1afe110d345004ba7d72a239de8f118459d60461db9f46fff05f67b4fc7ab33c",
+            "display_name": "MenuPatternTestNg081",
+            "file": "test/unittest/core/pattern/menu/menu_pattern_test_ng.cpp"
+          }
+        ]
+      },
+      "annotation": {
+        "annotator": "P1-I2 manual reviewer",
+        "rationale": "The discovered MenuPatternTestNg081 body at lines 1487-1515 directly calls MenuPattern::OnModifyDone at line 1513; qualified type avoids same-name pattern methods."
+      }
+    }
+  ]
+}

@@ -76,6 +76,7 @@ class SymbolIndexTests(unittest.TestCase):
             display_name="ValueIsTwentyOne",
             fixture_identity=self.fixture.identity,
             source_range=source_range(self.test_source, 20, 22, 20, 38),
+            body_range=source_range(self.test_source, 21, 1, 25, 2),
         )
 
     def tearDown(self) -> None:
@@ -323,9 +324,118 @@ class SymbolIndexTests(unittest.TestCase):
         finally:
             connection.close()
 
-        self.assertTrue({"test_entities", "test_fixture_cases"}.issubset(tables))
+        self.assertTrue(
+            {
+                "test_entities",
+                "test_fixture_cases",
+                "test_case_bodies",
+                "test_symbol_references",
+            }.issubset(tables)
+        )
         self.assertNotIn("macro", columns)
         self.assertNotIn("framework", columns)
+
+    def test_direct_symbol_test_mapping_is_identity_safe_and_explainable(self) -> None:
+        second_case = TestCase(
+            identity=SymbolIdentity("test:case:widget:second"),
+            display_name="SecondValueCase",
+            fixture_identity=self.fixture.identity,
+            source_range=source_range(self.test_source, 30, 22, 30, 37),
+            body_range=source_range(self.test_source, 31, 1, 34, 2),
+        )
+        value_first = source_range(self.test_source, 22, 8, 22, 13)
+        value_second = source_range(self.test_source, 32, 8, 32, 13)
+        overload_first = source_range(self.test_source, 23, 8, 23, 13)
+        outside_all_cases = source_range(self.test_source, 28, 8, 28, 13)
+        facts = (
+            SymbolSemanticFacts(
+                self.value.identity,
+                references=(
+                    value_second,
+                    outside_all_cases,
+                    value_first,
+                    value_first,
+                ),
+                callees=(SymbolIdentity("opaque:dangling-same-name"),),
+            ),
+            SymbolSemanticFacts(
+                self.overload.identity,
+                references=(overload_first,),
+            ),
+        )
+
+        with self._index() as index:
+            index.rebuild(
+                (self.value, self.overload),
+                semantic_facts=facts,
+                test_fixtures=(self.fixture,),
+                test_cases=(second_case, self.test_case),
+            )
+            first_snapshot = index.tested_symbol_mappings_for_case(
+                self.test_case.identity
+            )
+            index.rebuild(
+                (self.overload, self.value),
+                semantic_facts=tuple(reversed(facts)),
+                test_fixtures=(self.fixture,),
+                test_cases=(self.test_case, second_case),
+            )
+            self.assertEqual(
+                index.tested_symbol_mappings_for_case(self.test_case.identity),
+                first_snapshot,
+            )
+
+        with self._index() as reopened:
+            first_symbols = reopened.directly_referenced_symbols(
+                self.test_case.identity
+            )
+            value_cases = reopened.test_cases_for_symbol(self.value.identity)
+            overload_cases = reopened.test_cases_for_symbol(self.overload.identity)
+            mappings = reopened.tested_symbol_mappings_for_case(
+                self.test_case.identity
+            )
+            reverse_mappings = reopened.tested_symbol_mappings_for_symbol(
+                self.value.identity
+            )
+
+        self.assertEqual(
+            tuple(symbol.identity for symbol in first_symbols),
+            (self.overload.identity, self.value.identity),
+        )
+        self.assertEqual(value_cases, (self.test_case, second_case))
+        self.assertEqual(overload_cases, (self.test_case,))
+        by_symbol = {mapping.symbol_identity: mapping for mapping in mappings}
+        self.assertEqual(by_symbol[self.value.identity].references, (value_first,))
+        self.assertEqual(
+            by_symbol[self.overload.identity].references,
+            (overload_first,),
+        )
+        self.assertEqual(
+            tuple(mapping.test_case_identity for mapping in reverse_mappings),
+            (self.test_case.identity, second_case.identity),
+        )
+        self.assertEqual(reverse_mappings[1].references, (value_second,))
+
+    def test_case_without_body_has_no_inferred_symbol_mapping(self) -> None:
+        case_without_body = replace(self.test_case, body_range=None)
+        facts = SymbolSemanticFacts(
+            self.value.identity,
+            references=(source_range(self.test_source, 22, 8, 22, 13),),
+        )
+
+        with self._index() as index:
+            index.rebuild(
+                (self.value,),
+                semantic_facts=(facts,),
+                test_fixtures=(self.fixture,),
+                test_cases=(case_without_body,),
+            )
+
+            self.assertEqual(
+                index.directly_referenced_symbols(case_without_body.identity),
+                (),
+            )
+            self.assertEqual(index.test_cases_for_symbol(self.value.identity), ())
 
     def test_operations_after_close_fail(self) -> None:
         index = self._index()

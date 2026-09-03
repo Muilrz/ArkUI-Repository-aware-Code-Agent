@@ -11,6 +11,7 @@ from arkui_agent.repository.index import (
     SymbolIndexClosedError,
     SymbolIndexError,
     SymbolSemanticFacts,
+    TestedSymbolMapping,
 )
 from arkui_agent.repository.model import (
     RepositoryFile,
@@ -40,6 +41,16 @@ from arkui_agent.repository.test_discovery import (
     TestDiscoveryError,
     TestMacroRecognizer,
 )
+from arkui_agent.repository.text_search import (
+    RepositoryTextSearch,
+    RepositoryTextSearchError,
+    TextSearchBackendError,
+    TextSearchMode,
+    TextSearchQuery,
+    TextSearchQueryError,
+    TextSearchResult,
+    TextSearchToolUnavailableError,
+)
 from arkui_agent.repository.workspace import (
     ARKUI_REPO_ROOT,
     RepositoryConfigurationError,
@@ -63,6 +74,8 @@ __all__ = [
     "RepositoryRootError",
     "RepositoryScanner",
     "RepositoryTestDiscoverer",
+    "RepositoryTextSearch",
+    "RepositoryTextSearchError",
     "RepositoryWorkspace",
     "RepositoryWorkspaceError",
     "SemanticProvider",
@@ -83,5 +96,12 @@ __all__ = [
     "TestDiscoveryError",
     "TestFixture",
     "TestMacroRecognizer",
+    "TextSearchBackendError",
+    "TextSearchMode",
+    "TextSearchQuery",
+    "TextSearchQueryError",
+    "TextSearchResult",
+    "TextSearchToolUnavailableError",
+    "TestedSymbolMapping",
     "classify_repository_path",
 ]

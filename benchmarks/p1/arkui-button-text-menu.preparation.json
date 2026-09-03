@@ -1,0 +1,20 @@
+{
+  "semantic_files": [
+    "frameworks/core/components_ng/pattern/button/button_pattern.cpp",
+    "frameworks/core/components_ng/pattern/button/button_pattern.h",
+    "frameworks/core/components_ng/pattern/text/text_pattern.cpp",
+    "frameworks/core/components_ng/pattern/text/text_pattern.h",
+    "frameworks/core/components_ng/pattern/menu/menu_pattern.cpp",
+    "frameworks/core/components_ng/pattern/menu/menu_pattern.h"
+  ],
+  "test_files": [
+    "test/unittest/core/pattern/button/button_content_modifier_two_test_ng.cpp",
+    "test/unittest/core/pattern/text/text_pattern_test_ng.cpp",
+    "test/unittest/core/pattern/menu/menu_pattern_test_ng.cpp"
+  ],
+  "fallback_include_directories": [
+    ".",
+    "frameworks",
+    "interfaces/inner_api/ace"
+  ]
+}

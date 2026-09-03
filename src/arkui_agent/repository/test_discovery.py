@@ -78,6 +78,7 @@ class TestMacroRecognizer:
                 declarations,
             )
             case_range = _source_range(file, source, *match.span("case"))
+            body_range = _test_body_range(file, source, match.start())
             fixture_identity_parts = [fixture_name]
             if has_declaration:
                 fixture_identity_parts.extend(
@@ -108,6 +109,7 @@ class TestMacroRecognizer:
                     display_name=case_name,
                     fixture_identity=fixture.identity,
                     source_range=case_range,
+                    body_range=body_range,
                 )
             )
         return TestDiscovery(
@@ -199,6 +201,105 @@ def _source_location(
     line = source.count("\n", 0, offset) + 1
     line_start = source.rfind("\n", 0, offset) + 1
     return SourceLocation(file, line, offset - line_start + 1)
+
+
+def _test_body_range(
+    file: RepositoryFile, source: str, invocation_offset: int
+) -> SourceRange | None:
+    opening_parenthesis = source.find("(", invocation_offset)
+    if opening_parenthesis < 0:
+        return None
+    closing_parenthesis = _matching_delimiter(
+        source, opening_parenthesis, opening="(", closing=")"
+    )
+    if closing_parenthesis is None:
+        return None
+    opening_brace = _skip_trivia(source, closing_parenthesis + 1)
+    if opening_brace >= len(source) or source[opening_brace] != "{":
+        return None
+    closing_brace = _matching_delimiter(
+        source, opening_brace, opening="{", closing="}"
+    )
+    if closing_brace is None:
+        return None
+    return _source_range(file, source, opening_brace, closing_brace + 1)
+
+
+def _matching_delimiter(
+    source: str, start: int, *, opening: str, closing: str
+) -> int | None:
+    depth = 0
+    offset = start
+    while offset < len(source):
+        if source.startswith('R"', offset):
+            raw_string_end = _skip_raw_string(source, offset)
+            if raw_string_end is not None:
+                offset = raw_string_end
+                continue
+        if source.startswith("//", offset):
+            newline = source.find("\n", offset + 2)
+            offset = len(source) if newline < 0 else newline + 1
+            continue
+        if source.startswith("/*", offset):
+            terminator = source.find("*/", offset + 2)
+            if terminator < 0:
+                return None
+            offset = terminator + 2
+            continue
+        character = source[offset]
+        if character in {'"', "'"}:
+            offset = _skip_quoted(source, offset, character)
+            continue
+        if character == opening:
+            depth += 1
+        elif character == closing:
+            depth -= 1
+            if depth == 0:
+                return offset
+        offset += 1
+    return None
+
+
+def _skip_quoted(source: str, start: int, quote: str) -> int:
+    offset = start + 1
+    while offset < len(source):
+        if source[offset] == "\\":
+            offset += 2
+            continue
+        if source[offset] == quote:
+            return offset + 1
+        offset += 1
+    return len(source)
+
+
+def _skip_raw_string(source: str, start: int) -> int | None:
+    delimiter_end = source.find("(", start + 2, start + 19)
+    if delimiter_end < 0:
+        return None
+    delimiter = source[start + 2 : delimiter_end]
+    if any(character.isspace() or character in "()\\" for character in delimiter):
+        return None
+    terminator = f"){delimiter}\""
+    terminator_start = source.find(terminator, delimiter_end + 1)
+    return len(source) if terminator_start < 0 else terminator_start + len(terminator)
+
+
+def _skip_trivia(source: str, start: int) -> int:
+    offset = start
+    while offset < len(source):
+        if source[offset].isspace():
+            offset += 1
+            continue
+        if source.startswith("//", offset):
+            newline = source.find("\n", offset + 2)
+            offset = len(source) if newline < 0 else newline + 1
+            continue
+        if source.startswith("/*", offset):
+            terminator = source.find("*/", offset + 2)
+            offset = len(source) if terminator < 0 else terminator + 2
+            continue
+        break
+    return offset
 
 
 def _fixture_sort_key(fixture: TestFixture) -> tuple[object, ...]:
