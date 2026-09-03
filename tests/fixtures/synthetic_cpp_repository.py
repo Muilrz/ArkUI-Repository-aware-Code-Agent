@@ -49,9 +49,22 @@ int DerivedWidget::doubled_value() const
 _TEST_SOURCE = """\
 #include "fixture/widget.h"
 
-#define FIXTURE_TEST(name) void name()
+class WidgetTest {};
+class AlternateWidgetTest {};
 
-FIXTURE_TEST(derived_widget_doubles_value)
+HWTEST_F(WidgetTest, ValueIsTwentyOne, TestSize.Level1)
+{
+    fixture::Widget widget;
+    (void)widget.value();
+}
+
+TEST_F(WidgetTest, DerivedWidgetDoublesValue)
+{
+    fixture::DerivedWidget widget;
+    (void)widget.doubled_value();
+}
+
+HWTEST_F(AlternateWidgetTest, DerivedWidgetDoublesValue, TestSize.Level1)
 {
     fixture::DerivedWidget widget;
     (void)widget.doubled_value();
@@ -102,4 +115,3 @@ def synthetic_cpp_repository() -> Iterator[SyntheticCppRepository]:
             source=source,
             test_source=test_source,
         )
-

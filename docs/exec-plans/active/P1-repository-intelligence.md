@@ -233,7 +233,7 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-G — Reference + Caller / Callee Retrieval
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ### Goal
 建立 symbol reference 与 call relation 查询能力。
@@ -266,7 +266,11 @@ compile database 应作为外部 repository/toolchain input 对待。
 
 ## P1-H — Test Fixture / Test Case Index
 
-- **Status:** Not Started
+- **Status:** In Progress
+
+### Codex Task Status
+- `P1-H1 — Test Entity Discovery & Index`: Completed
+- Remaining P1-H scope, including tested-symbol mapping: Not Started
 
 ### Goal
 把 test fixture / test case 作为一等 repository entity，建立后续 UT Agent 所需 Test-first Retrieval 基础。

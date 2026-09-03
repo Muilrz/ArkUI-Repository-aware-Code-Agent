@@ -7,7 +7,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SQLiteSymbolStorageError(RuntimeError):
@@ -73,6 +73,25 @@ CREATE TABLE IF NOT EXISTS symbol_relations (
     FOREIGN KEY (source_identity) REFERENCES symbols(identity) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS test_entities (
+    identity TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('fixture', 'case')),
+    display_name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_column INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_column INTEGER NOT NULL,
+    FOREIGN KEY (file_path) REFERENCES files(path)
+);
+
+CREATE TABLE IF NOT EXISTS test_fixture_cases (
+    fixture_identity TEXT NOT NULL,
+    case_identity TEXT PRIMARY KEY,
+    FOREIGN KEY (fixture_identity) REFERENCES test_entities(identity) ON DELETE CASCADE,
+    FOREIGN KEY (case_identity) REFERENCES test_entities(identity) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS symbols_by_display_name
     ON symbols(display_name, qualified_name, identity);
 CREATE INDEX IF NOT EXISTS symbols_by_qualified_name
@@ -83,6 +102,10 @@ CREATE INDEX IF NOT EXISTS symbol_references_by_identity
     ON symbol_references(symbol_identity, file_path, start_line, start_column);
 CREATE INDEX IF NOT EXISTS symbol_relations_by_source
     ON symbol_relations(source_identity, relation_kind, target_identity);
+CREATE INDEX IF NOT EXISTS test_entities_by_kind_name
+    ON test_entities(kind, display_name, file_path, start_line, start_column, identity);
+CREATE INDEX IF NOT EXISTS test_fixture_cases_by_fixture
+    ON test_fixture_cases(fixture_identity, case_identity);
 """
 
 
@@ -115,9 +138,15 @@ class SQLiteSymbolStorage:
         ranges: Sequence[tuple[str, str, str, int, int, int, int]],
         references: Sequence[tuple[str, str, int, int, int, int]],
         relations: Sequence[tuple[str, str, str]],
+        test_entities: Sequence[
+            tuple[str, str, str, str, int, int, int, int]
+        ],
+        fixture_cases: Sequence[tuple[str, str]],
     ) -> None:
         try:
             with self._connection:
+                self._connection.execute("DELETE FROM test_fixture_cases")
+                self._connection.execute("DELETE FROM test_entities")
                 self._connection.execute("DELETE FROM symbol_relations")
                 self._connection.execute("DELETE FROM symbol_references")
                 self._connection.execute("DELETE FROM symbol_ranges")
@@ -175,6 +204,28 @@ class SQLiteSymbolStorage:
                     ) VALUES (?, ?, ?)
                     """,
                     relations,
+                )
+                self._connection.executemany(
+                    """
+                    INSERT INTO test_entities(
+                        identity,
+                        kind,
+                        display_name,
+                        file_path,
+                        start_line,
+                        start_column,
+                        end_line,
+                        end_column
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    test_entities,
+                )
+                self._connection.executemany(
+                    """
+                    INSERT INTO test_fixture_cases(fixture_identity, case_identity)
+                    VALUES (?, ?)
+                    """,
+                    fixture_cases,
                 )
         except sqlite3.Error as exc:
             raise SQLiteSymbolStorageError("Unable to rebuild symbol index.") from exc
@@ -255,6 +306,74 @@ class SQLiteSymbolStorage:
             ORDER BY relation_kind, target_identity
             """,
             (identity,),
+        )
+
+    def test_entity(self, identity: str, kind: str) -> sqlite3.Row | None:
+        rows = self._query(
+            "SELECT * FROM test_entities WHERE identity = ? AND kind = ?",
+            (identity, kind),
+        )
+        return rows[0] if rows else None
+
+    def test_entities_by_name(
+        self, kind: str, display_name: str
+    ) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT * FROM test_entities
+            WHERE kind = ? AND display_name = ?
+            ORDER BY file_path, start_line, start_column, identity
+            """,
+            (kind, display_name),
+        )
+
+    def test_case(self, identity: str) -> sqlite3.Row | None:
+        rows = self._query(
+            """
+            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            FROM test_entities
+            JOIN test_fixture_cases
+              ON test_fixture_cases.case_identity = test_entities.identity
+            WHERE test_entities.identity = ? AND test_entities.kind = 'case'
+            """,
+            (identity,),
+        )
+        return rows[0] if rows else None
+
+    def test_cases_by_name(self, display_name: str) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            FROM test_entities
+            JOIN test_fixture_cases
+              ON test_fixture_cases.case_identity = test_entities.identity
+            WHERE test_entities.kind = 'case' AND test_entities.display_name = ?
+            ORDER BY
+                test_entities.file_path,
+                test_entities.start_line,
+                test_entities.start_column,
+                test_entities.identity
+            """,
+            (display_name,),
+        )
+
+    def test_cases_for_fixture(
+        self, fixture_identity: str
+    ) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT test_entities.*, test_fixture_cases.fixture_identity
+            FROM test_fixture_cases
+            JOIN test_entities
+              ON test_entities.identity = test_fixture_cases.case_identity
+            WHERE test_fixture_cases.fixture_identity = ?
+            ORDER BY
+                test_entities.file_path,
+                test_entities.start_line,
+                test_entities.start_column,
+                test_entities.identity
+            """,
+            (fixture_identity,),
         )
 
     def close(self) -> None:

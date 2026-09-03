@@ -146,6 +146,50 @@ class Symbol:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class TestFixture:
+    """A discovered repository test fixture independent of recognition syntax."""
+
+    identity: SymbolIdentity
+    display_name: str
+    source_range: SourceRange
+
+    def __post_init__(self) -> None:
+        if not self.display_name:
+            raise ValueError("TestFixture.display_name must not be empty.")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "identity": self.identity.value,
+            "display_name": self.display_name,
+            "source_range": self.source_range.to_dict(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TestCase:
+    """A discovered test case attached to one exact fixture identity."""
+
+    identity: SymbolIdentity
+    display_name: str
+    fixture_identity: SymbolIdentity
+    source_range: SourceRange
+
+    def __post_init__(self) -> None:
+        if not self.display_name:
+            raise ValueError("TestCase.display_name must not be empty.")
+        if self.identity == self.fixture_identity:
+            raise ValueError("TestCase identity must differ from fixture identity.")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "identity": self.identity.value,
+            "display_name": self.display_name,
+            "fixture_identity": self.fixture_identity.value,
+            "source_range": self.source_range.to_dict(),
+        }
+
+
 def _validate_repository_relative_path(path: PurePosixPath) -> None:
     if path.as_posix() in {"", "."}:
         raise ValueError("Repository file path must identify a file.")

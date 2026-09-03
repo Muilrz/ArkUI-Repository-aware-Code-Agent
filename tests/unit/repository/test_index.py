@@ -17,6 +17,8 @@ from arkui_agent.repository import (
     SymbolIndexError,
     SymbolKind,
     SymbolSemanticFacts,
+    TestCase,
+    TestFixture,
 )
 
 
@@ -40,6 +42,7 @@ class SymbolIndexTests(unittest.TestCase):
         self.database_path = self.runtime_directory / "custom.sqlite3"
         self.header = RepositoryFile.from_path("include/fixture/widget.h")
         self.source = RepositoryFile.from_path("src/widget.cpp")
+        self.test_source = RepositoryFile.from_path("tests/widget_test.cpp")
         self.empty_file = RepositoryFile.from_path("include/fixture/empty.h")
         self.namespace_identity = SymbolIdentity("opaque:namespace")
         self.parent_identity = SymbolIdentity("opaque:widget")
@@ -62,6 +65,17 @@ class SymbolIndexTests(unittest.TestCase):
             definition=source_range(self.source, 10, 5, 10, 10),
             parent_identity=self.parent_identity,
             namespace_identity=self.namespace_identity,
+        )
+        self.fixture = TestFixture(
+            identity=SymbolIdentity("test:fixture:widget"),
+            display_name="WidgetTest",
+            source_range=source_range(self.test_source, 20, 10, 20, 20),
+        )
+        self.test_case = TestCase(
+            identity=SymbolIdentity("test:case:widget:value"),
+            display_name="ValueIsTwentyOne",
+            fixture_identity=self.fixture.identity,
+            source_range=source_range(self.test_source, 20, 22, 20, 38),
         )
 
     def tearDown(self) -> None:
@@ -214,6 +228,104 @@ class SymbolIndexTests(unittest.TestCase):
         )
         self.assertNotIn("clangd_id", symbol_columns)
         self.assertNotIn("usr", symbol_columns)
+
+    def test_test_entities_and_fixture_case_relation_round_trip(self) -> None:
+        with self._index() as index:
+            index.rebuild(
+                (),
+                test_fixtures=(self.fixture,),
+                test_cases=(self.test_case,),
+            )
+
+            self.assertEqual(index.get_test_fixture(self.fixture.identity), self.fixture)
+            self.assertEqual(index.get_test_case(self.test_case.identity), self.test_case)
+            self.assertEqual(
+                index.test_cases_for_fixture(self.fixture.identity),
+                (self.test_case,),
+            )
+            self.assertIn(self.test_source, index.files())
+
+    def test_same_name_test_entities_are_not_merged_and_order_is_stable(self) -> None:
+        other_fixture = TestFixture(
+            identity=SymbolIdentity("test:fixture:other"),
+            display_name=self.fixture.display_name,
+            source_range=source_range(self.header, 30, 10, 30, 20),
+        )
+        other_case = TestCase(
+            identity=SymbolIdentity("test:case:other:value"),
+            display_name=self.test_case.display_name,
+            fixture_identity=other_fixture.identity,
+            source_range=source_range(self.header, 30, 22, 30, 38),
+        )
+        with self._index() as index:
+            index.rebuild(
+                (),
+                test_fixtures=(self.fixture, other_fixture),
+                test_cases=(self.test_case, other_case),
+            )
+            first_fixtures = index.find_test_fixtures(self.fixture.display_name)
+            first_cases = index.find_test_cases(self.test_case.display_name)
+            index.rebuild(
+                (),
+                test_fixtures=(other_fixture, self.fixture),
+                test_cases=(other_case, self.test_case),
+            )
+            second_fixtures = index.find_test_fixtures(self.fixture.display_name)
+            second_cases = index.find_test_cases(self.test_case.display_name)
+
+        self.assertEqual(first_fixtures, second_fixtures)
+        self.assertEqual(first_cases, second_cases)
+        self.assertEqual(
+            {fixture.identity for fixture in first_fixtures},
+            {self.fixture.identity, other_fixture.identity},
+        )
+        self.assertEqual(
+            {case.fixture_identity for case in first_cases},
+            {self.fixture.identity, other_fixture.identity},
+        )
+
+    def test_test_case_requires_exact_indexed_fixture_identity(self) -> None:
+        missing_fixture_case = replace(
+            self.test_case,
+            fixture_identity=SymbolIdentity("test:fixture:missing"),
+        )
+        with self._index() as index:
+            index.rebuild((), test_fixtures=(self.fixture,))
+
+            with self.assertRaisesRegex(SymbolIndexError, "indexed fixture identity"):
+                index.rebuild(
+                    (),
+                    test_fixtures=(self.fixture,),
+                    test_cases=(missing_fixture_case,),
+                )
+
+            self.assertEqual(index.get_test_fixture(self.fixture.identity), self.fixture)
+
+    def test_schema_keeps_test_recognition_details_out_of_storage(self) -> None:
+        with self._index() as index:
+            index.rebuild(
+                (),
+                test_fixtures=(self.fixture,),
+                test_cases=(self.test_case,),
+            )
+        connection = sqlite3.connect(self.database_path)
+        try:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(test_entities)")
+            }
+        finally:
+            connection.close()
+
+        self.assertTrue({"test_entities", "test_fixture_cases"}.issubset(tables))
+        self.assertNotIn("macro", columns)
+        self.assertNotIn("framework", columns)
 
     def test_operations_after_close_fail(self) -> None:
         index = self._index()

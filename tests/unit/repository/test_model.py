@@ -12,6 +12,8 @@ from arkui_agent.repository import (
     Symbol,
     SymbolIdentity,
     SymbolKind,
+    TestCase,
+    TestFixture,
 )
 
 
@@ -196,6 +198,43 @@ class SymbolContractTests(unittest.TestCase):
                 display_name="fixture",
                 qualified_name="fixture",
             )
+
+
+class TestEntityContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.file = RepositoryFile.from_path("tests/widget_test.cpp")
+        self.fixture_range = source_range(self.file, 8, 10, 8, 20)
+        self.case_range = source_range(self.file, 8, 22, 8, 38)
+        self.fixture = TestFixture(
+            identity=SymbolIdentity("test:fixture:widget"),
+            display_name="WidgetTest",
+            source_range=self.fixture_range,
+        )
+
+    def test_fixture_and_case_are_immutable_backend_neutral_entities(self) -> None:
+        case = TestCase(
+            identity=SymbolIdentity("test:case:widget:value"),
+            display_name="ValueIsTwentyOne",
+            fixture_identity=self.fixture.identity,
+            source_range=self.case_range,
+        )
+
+        self.assertEqual(case.fixture_identity, self.fixture.identity)
+        self.assertEqual(case.source_range.file, self.file)
+        json.dumps(self.fixture.to_dict())
+        json.dumps(case.to_dict())
+        with self.assertRaises(FrozenInstanceError):
+            case.display_name = "Changed"  # type: ignore[misc]
+
+    def test_test_entity_identity_is_separate_from_same_display_name(self) -> None:
+        same_name = TestFixture(
+            identity=SymbolIdentity("test:fixture:other-widget"),
+            display_name=self.fixture.display_name,
+            source_range=source_range(self.file, 15, 10, 15, 20),
+        )
+
+        self.assertNotEqual(self.fixture.identity, same_name.identity)
+        self.assertNotEqual(self.fixture, same_name)
 
 
 if __name__ == "__main__":

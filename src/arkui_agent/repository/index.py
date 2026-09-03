@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Self, TypeVar
 
 from arkui_agent.repository._sqlite_symbol_storage import (
     SQLiteSymbolStorage,
@@ -20,10 +20,13 @@ from arkui_agent.repository.model import (
     Symbol,
     SymbolIdentity,
     SymbolKind,
+    TestCase,
+    TestFixture,
 )
 
 
 SYMBOL_INDEX_FILENAME = "symbol-index.sqlite3"
+_TestEntity = TypeVar("_TestEntity", TestFixture, TestCase)
 
 
 class SymbolIndexError(RuntimeError):
@@ -81,12 +84,32 @@ class SymbolIndex:
         *,
         files: Iterable[RepositoryFile] = (),
         semantic_facts: Iterable[SymbolSemanticFacts] = (),
+        test_fixtures: Iterable[TestFixture] = (),
+        test_cases: Iterable[TestCase] = (),
     ) -> None:
         """Atomically replace the index with one unified-model snapshot."""
 
         self._require_open()
         symbol_by_identity = _unique_symbols(symbols)
         facts_by_identity = _merge_semantic_facts(semantic_facts)
+        fixture_by_identity = _unique_test_fixtures(test_fixtures)
+        case_by_identity = _unique_test_cases(test_cases)
+        shared_test_identities = fixture_by_identity.keys() & case_by_identity.keys()
+        if shared_test_identities:
+            shared = min(identity.value for identity in shared_test_identities)
+            raise SymbolIndexError(
+                f"Test fixture and case share opaque identity {shared!r}."
+            )
+        unknown_fixtures = {
+            case.fixture_identity
+            for case in case_by_identity.values()
+            if case.fixture_identity not in fixture_by_identity
+        }
+        if unknown_fixtures:
+            unknown = min(identity.value for identity in unknown_fixtures)
+            raise SymbolIndexError(
+                f"Test case requires an indexed fixture identity: {unknown}"
+            )
         unknown_fact_sources = set(facts_by_identity).difference(symbol_by_identity)
         if unknown_fact_sources:
             unknown = min(identity.value for identity in unknown_fact_sources)
@@ -145,6 +168,34 @@ class SymbolIndex:
                 for callee in facts.callees
             )
 
+        test_entity_records: list[
+            tuple[str, str, str, str, int, int, int, int]
+        ] = []
+        fixture_case_records: list[tuple[str, str]] = []
+        for fixture in fixture_by_identity.values():
+            file_set.add(fixture.source_range.file)
+            test_entity_records.append(
+                _test_entity_record(
+                    fixture.identity,
+                    "fixture",
+                    fixture.display_name,
+                    fixture.source_range,
+                )
+            )
+        for case in case_by_identity.values():
+            file_set.add(case.source_range.file)
+            test_entity_records.append(
+                _test_entity_record(
+                    case.identity,
+                    "case",
+                    case.display_name,
+                    case.source_range,
+                )
+            )
+            fixture_case_records.append(
+                (case.fixture_identity.value, case.identity.value)
+            )
+
         try:
             self._storage.replace_all(
                 files=tuple(
@@ -155,6 +206,8 @@ class SymbolIndex:
                 ranges=tuple(sorted(range_records)),
                 references=tuple(sorted(reference_records)),
                 relations=tuple(sorted(relation_records)),
+                test_entities=tuple(sorted(test_entity_records)),
+                fixture_cases=tuple(sorted(fixture_case_records)),
             )
         except SQLiteSymbolStorageError as exc:
             raise SymbolIndexError(str(exc)) from exc
@@ -248,6 +301,68 @@ class SymbolIndex:
             ),
         )
 
+    def get_test_fixture(self, identity: SymbolIdentity) -> TestFixture | None:
+        """Return one exact test fixture identity when indexed."""
+
+        self._require_open()
+        try:
+            row = self._storage.test_entity(identity.value, "fixture")
+            return None if row is None else _test_fixture_from_row(row)
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def get_test_case(self, identity: SymbolIdentity) -> TestCase | None:
+        """Return one exact test case identity when indexed."""
+
+        self._require_open()
+        try:
+            row = self._storage.test_case(identity.value)
+            return None if row is None else _test_case_from_row(row)
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def find_test_fixtures(self, display_name: str) -> tuple[TestFixture, ...]:
+        """Return same-name fixture candidates without merging their identities."""
+
+        self._require_open()
+        try:
+            return tuple(
+                _test_fixture_from_row(row)
+                for row in self._storage.test_entities_by_name(
+                    "fixture", display_name
+                )
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def find_test_cases(self, display_name: str) -> tuple[TestCase, ...]:
+        """Return same-name case candidates without merging their identities."""
+
+        self._require_open()
+        try:
+            return tuple(
+                _test_case_from_row(row)
+                for row in self._storage.test_cases_by_name(display_name)
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
+    def test_cases_for_fixture(
+        self, fixture_identity: SymbolIdentity
+    ) -> tuple[TestCase, ...]:
+        """Return cases for one exact fixture identity in deterministic order."""
+
+        self._require_open()
+        try:
+            return tuple(
+                _test_case_from_row(row)
+                for row in self._storage.test_cases_for_fixture(
+                    fixture_identity.value
+                )
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
     def close(self) -> None:
         if self._closed:
             return
@@ -304,6 +419,31 @@ def _unique_symbols(symbols: Iterable[Symbol]) -> dict[SymbolIdentity, Symbol]:
     return unique
 
 
+def _unique_test_fixtures(
+    fixtures: Iterable[TestFixture],
+) -> dict[SymbolIdentity, TestFixture]:
+    return _unique_test_entities(fixtures, "fixture")
+
+
+def _unique_test_cases(cases: Iterable[TestCase]) -> dict[SymbolIdentity, TestCase]:
+    return _unique_test_entities(cases, "case")
+
+
+def _unique_test_entities(
+    items: Iterable[_TestEntity], kind: str
+) -> dict[SymbolIdentity, _TestEntity]:
+    unique: dict[SymbolIdentity, _TestEntity] = {}
+    for item in items:
+        existing = unique.get(item.identity)
+        if existing is not None and existing != item:
+            raise SymbolIndexError(
+                f"Conflicting test {kind} records share opaque identity "
+                f"{item.identity.value!r}."
+            )
+        unique[item.identity] = item
+    return unique
+
+
 def _merge_semantic_facts(
     facts: Iterable[SymbolSemanticFacts],
 ) -> dict[SymbolIdentity, SymbolSemanticFacts]:
@@ -344,6 +484,41 @@ def _source_range_from_row(row: Any) -> SourceRange:
     return SourceRange(
         SourceLocation(file, row["start_line"], row["start_column"]),
         SourceLocation(file, row["end_line"], row["end_column"]),
+    )
+
+
+def _test_entity_record(
+    identity: SymbolIdentity,
+    kind: str,
+    display_name: str,
+    source_range: SourceRange,
+) -> tuple[str, str, str, str, int, int, int, int]:
+    return (
+        identity.value,
+        kind,
+        display_name,
+        source_range.file.path.as_posix(),
+        source_range.start.line,
+        source_range.start.column,
+        source_range.end.line,
+        source_range.end.column,
+    )
+
+
+def _test_fixture_from_row(row: Any) -> TestFixture:
+    return TestFixture(
+        identity=SymbolIdentity(row["identity"]),
+        display_name=row["display_name"],
+        source_range=_source_range_from_row(row),
+    )
+
+
+def _test_case_from_row(row: Any) -> TestCase:
+    return TestCase(
+        identity=SymbolIdentity(row["identity"]),
+        display_name=row["display_name"],
+        fixture_identity=SymbolIdentity(row["fixture_identity"]),
+        source_range=_source_range_from_row(row),
     )
 
 

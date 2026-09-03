@@ -19,6 +19,8 @@ from arkui_agent.repository.model import (
     Symbol,
     SymbolIdentity,
     SymbolKind,
+    TestCase,
+    TestFixture,
 )
 from arkui_agent.repository.scanner import (
     DEFAULT_EXCLUDED_DIRECTORIES,
@@ -31,6 +33,13 @@ from arkui_agent.repository.semantic import (
     SemanticProviderClosedError,
     SemanticProviderError,
 )
+from arkui_agent.repository.test_discovery import (
+    ARKUI_FIXTURE_TEST_MACROS,
+    RepositoryTestDiscoverer,
+    TestDiscovery,
+    TestDiscoveryError,
+    TestMacroRecognizer,
+)
 from arkui_agent.repository.workspace import (
     ARKUI_REPO_ROOT,
     RepositoryConfigurationError,
@@ -42,6 +51,7 @@ from arkui_agent.repository.workspace import (
 
 __all__ = [
     "ARKUI_REPO_ROOT",
+    "ARKUI_FIXTURE_TEST_MACROS",
     "ClangdProtocolError",
     "ClangdSemanticProvider",
     "ClangdUnavailableError",
@@ -52,6 +62,7 @@ __all__ = [
     "RepositoryPathError",
     "RepositoryRootError",
     "RepositoryScanner",
+    "RepositoryTestDiscoverer",
     "RepositoryWorkspace",
     "RepositoryWorkspaceError",
     "SemanticProvider",
@@ -67,5 +78,10 @@ __all__ = [
     "SymbolIndexError",
     "SymbolKind",
     "SymbolSemanticFacts",
+    "TestCase",
+    "TestDiscovery",
+    "TestDiscoveryError",
+    "TestFixture",
+    "TestMacroRecognizer",
     "classify_repository_path",
 ]

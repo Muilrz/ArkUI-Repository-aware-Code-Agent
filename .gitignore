@@ -1,27 +1,47 @@
-# Python caches and tooling
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Test, coverage, and static-analysis output
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+.tox/
+.nox/
 
 # Virtual environments
 .venv/
 venv/
 env/
+ENV/
 
-# Build and package output
+# Python build and package output
 build/
 dist/
 *.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
 
 # Databases and generated indexes
 *.db
 *.db-*
 *.sqlite
 *.sqlite3
+*.sqlite-*
 *.index
 *.idx
 
@@ -34,3 +54,20 @@ compile_commands.json
 compile_flags.txt
 .cache/clangd/
 
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Editor and IDE state
+.idea/
+.vscode/
+*.code-workspace
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

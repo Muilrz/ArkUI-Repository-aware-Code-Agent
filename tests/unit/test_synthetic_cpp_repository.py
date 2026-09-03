@@ -42,8 +42,9 @@ class SyntheticCppRepositoryTests(unittest.TestCase):
             self.assertIn("class DerivedWidget : public Widget", header)
             self.assertIn("int Widget::value() const", source)
             self.assertIn("return value() * 2;", source)
-            self.assertIn("#define FIXTURE_TEST(name)", test_source)
-            self.assertIn("FIXTURE_TEST(derived_widget_doubles_value)", test_source)
+            self.assertIn("class WidgetTest", test_source)
+            self.assertIn("HWTEST_F(WidgetTest, ValueIsTwentyOne", test_source)
+            self.assertIn("TEST_F(WidgetTest, DerivedWidgetDoublesValue", test_source)
 
     def test_fixture_instances_are_isolated(self) -> None:
         with synthetic_cpp_repository() as first:
@@ -89,4 +90,3 @@ class SyntheticCppRepositoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
