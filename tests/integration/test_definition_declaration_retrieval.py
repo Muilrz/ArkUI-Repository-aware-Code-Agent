@@ -70,6 +70,8 @@ class DefinitionDeclarationRetrievalIntegrationTests(unittest.TestCase):
 
 
 class ArkUIRetrievalSmokeTests(unittest.TestCase):
+    external_validation_requirements = ("ARKUI_REPO_ROOT",)
+
     def test_button_pattern_definition_and_declaration(self) -> None:
         repository_root = os.environ.get("ARKUI_REPO_ROOT")
         if not repository_root:

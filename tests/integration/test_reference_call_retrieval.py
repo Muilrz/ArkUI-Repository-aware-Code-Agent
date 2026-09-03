@@ -127,6 +127,8 @@ class ReferenceCallRetrievalIntegrationTests(unittest.TestCase):
 
 
 class ArkUIReferenceCallSmokeTests(unittest.TestCase):
+    external_validation_requirements = ("ARKUI_REPO_ROOT",)
+
     def test_button_pattern_on_modify_done_relations(self) -> None:
         repository_root = os.environ.get("ARKUI_REPO_ROOT")
         if not repository_root:

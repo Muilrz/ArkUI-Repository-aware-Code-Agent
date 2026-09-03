@@ -53,6 +53,8 @@ class TestEntityIndexIntegrationTests(unittest.TestCase):
 
 
 class ArkUITestEntitySmokeTests(unittest.TestCase):
+    external_validation_requirements = ("ARKUI_REPO_ROOT",)
+
     def test_xcomponent_controller_fixture_and_cases(self) -> None:
         repository_root = os.environ.get("ARKUI_REPO_ROOT")
         if not repository_root:
