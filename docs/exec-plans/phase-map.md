@@ -256,19 +256,14 @@ P2 回答：
 
 ## In Scope
 
-- generic symbol graph
-- component graph
-- test graph
-- ArkUI entity classification
-- ArkUI framework relations
 - graph persistence/query
-- graph expansion
+- local / bounded graph traversal
+- symbol / component based graph expansion
 - component creation trace
 - property update trace
 - measure/layout trace
 - overlay trace
 - lifecycle trace
-- task subgraph extraction
 
 ## Out of Scope
 
@@ -316,7 +311,8 @@ P3 回答：
 - Symbol Retrieval
 - Reference Retrieval
 - Test Retrieval
-- Graph Expansion
+- task-driven Graph Expansion
+- Task Subgraph Extraction
 - candidate ranking
 - context tiering
 - Token Budget

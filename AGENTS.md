@@ -26,20 +26,24 @@
 
 ## Current Development Scope
 
-当前优先推进：
+已完成：
 
 - P0 — Engineering Foundation
 - P1 — Repository Intelligence
 
-除非当前任务明确要求，不要提前实现 P2 及后续 Phase。
+当前优先推进：
+
+- P2 — ArkUI Code Graph
+
+除非当前任务明确要求，不要提前实现 P3 及后续 Phase。
 
 开发任务应尽量以 milestone 为最小可验收单元，例如：
 
-- `P0-A`
-- `P1-C`
-- `P1-G`
+- `P2-A`
+- `P2-B`
+- `P2-C`
 
-若 milestone 仍过大，可以继续拆成如 `P1-C1`、`P1-C2` 的更小 Codex task。
+若 milestone 仍过大，可以继续拆成如 `P2-C1`、`P2-C2` 的更小 Codex task。
 
 ## Core Architecture Boundaries
 
@@ -49,6 +53,8 @@
 - Task Retrieval 与 Task Context Builder 可以属于同一工程 Phase，但代码职责应保持分离。
 - P4 Agent Runtime 与 P5 UT Agent & Repair 必须保持边界：先验证 Agent 能正确使用工具和上下文，再引入代码修改、Build、Test 和 Repair 闭环。
 - Evaluation 从项目早期同步建设；P6 负责形成正式 benchmark、ablation 与 hardening，而不是等到 P6 才开始评估。
+- P2 负责 graph model、ArkUI framework-aware relation 和通用局部 graph traversal；
+  Task-driven Graph Expansion、Task Subgraph Extraction 与 Context Pack 属于 P3。
 
 ## Target Repository
 

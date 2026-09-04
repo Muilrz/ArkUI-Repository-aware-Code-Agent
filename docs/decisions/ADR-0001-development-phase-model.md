@@ -87,9 +87,14 @@ P1-C3
 
 ## Follow-up
 
-当前优先细化并执行：
+Initial follow-up at ADR acceptance:
 
-- P0
-- P1
+- 优先细化并执行 P0、P1。
+- P2-P6 暂保持 Phase-level definition，接近开发时再进一步拆 milestone。
 
-P2-P6 保持 Phase-level definition，接近开发时再进一步拆 milestone，避免过早设计。
+### Follow-up Status
+
+- P0: Completed
+- P1: Completed
+- P2: 已进入执行阶段，并已细化为独立 execution plan。
+- P3-P6: 继续保持 Phase-level definition，接近开发时再细化 milestone。

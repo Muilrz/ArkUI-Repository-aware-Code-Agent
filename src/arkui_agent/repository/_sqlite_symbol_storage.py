@@ -382,6 +382,14 @@ class SQLiteSymbolStorage:
             (identity,),
         )
 
+    def test_fixtures(self) -> tuple[sqlite3.Row, ...]:
+        return self._query(
+            """
+            SELECT * FROM test_entities WHERE kind = 'fixture'
+            ORDER BY file_path, start_line, start_column, identity
+            """
+        )
+
     def test_entity(self, identity: str, kind: str) -> sqlite3.Row | None:
         rows = self._query(
             "SELECT * FROM test_entities WHERE identity = ? AND kind = ?",

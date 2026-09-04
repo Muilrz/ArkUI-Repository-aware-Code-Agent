@@ -357,6 +357,17 @@ class SymbolIndex:
             ),
         )
 
+    def test_fixtures(self) -> tuple[TestFixture, ...]:
+        """Enumerate all indexed fixtures, including fixtures without cases."""
+
+        self._require_open()
+        try:
+            return tuple(
+                _test_fixture_from_row(row) for row in self._storage.test_fixtures()
+            )
+        except SQLiteSymbolStorageError as exc:
+            raise SymbolIndexError(str(exc)) from exc
+
     def get_test_fixture(self, identity: SymbolIdentity) -> TestFixture | None:
         """Return one exact test fixture identity when indexed."""
 
