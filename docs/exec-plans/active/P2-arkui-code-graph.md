@@ -814,7 +814,7 @@ git apply --reverse --check var/review/p2-f.patch
 
 # P2-G — Measure / Layout Trace
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ## Goal
 
@@ -875,6 +875,82 @@ LayoutProperty
 5. trace 每个节点和 relation 均有 provenance。
 6. incomplete layout chain 可明确报告。
 7. 至少选择具有 layout algorithm 的真实 ArkUI component 验证。
+
+## P2-G Implementation / Frozen Expectations
+
+实现 `graph/layout.py` 的 `trace_measure_layout` 与 immutable typed result，复用 P1
+opaque identity、generic graph、role map 和 P2-D primitives。Pattern member、CREATE、
+operation binding、implementation、property dependency 分别保存各自证据；不新增
+Pattern → factory CALL 或 Measure → Layout CALL。规范详见 `graph-contract.md` P2-G。
+
+源码审查 revision：`0096f5bd943ed1f7fa56883aed0e2379f13c2885`。预期已在第一次 query
+前写入 `tests/fixtures/layout_cases.py`，包括 20 个独立 source checks。下面路径均以
+`frameworks/core/components_ng/pattern/` 为前缀。
+
+| Component | 冻结源码事实 | Expected trace / status |
+|---|---|---|
+| Button | `button_pattern.h:61/63` 简单创建 ButtonLayoutAlgorithm；`button_layout_algorithm.h:32` Measure；`.cpp:37/44` 实现与 ButtonLayoutProperty 类型引用；没有自身 Layout 声明 | Pattern → factory → algorithm → Measure → LayoutProperty；incomplete，`missing_layout_binding` |
+| Text | `text_pattern.cpp:9080/9087/9089` 分支、有参创建 TextLayoutAlgorithm；`text_layout_algorithm.h:73` / `.cpp:164/171` 为 MeasureContent 与 TextLayoutProperty 引用；没有自身 Layout 声明 | Pattern → factory；incomplete，`unsupported_factory_body` |
+| Menu | `menu_pattern.cpp:1447/1452/1455/1457` switch 返回 MultiMenu/SubMenu/MenuLayoutAlgorithm；`menu_layout_algorithm.h:108/110` 与 `.cpp:901/2105` 分别为 Measure/Layout；property 引用在 `.cpp:910/2120` | Pattern → factory；ambiguous，保留三个 algorithm identity，`ambiguous_algorithm_identity` + `missing_create_binding` |
+
+Menu 的 switch 仅用于提供有精确 P1 REFERENCE 的候选；不取默认分支，不为复杂创建补
+CREATE。MultiMenu/SubMenu 在现有 P2-C catalog 中为 unknown；未扩展 role catalog。
+Text/Menu 的后续 implementation 是源码审查事实，未跨过缺失 CREATE 放入已恢复 trace。
+Button 的 inherited Layout 留缺口，不能据此宣称完整运行时 pipeline。
+
+Seed 为显式 Pattern identity 和 component identity。按 P1 METHOD parent 找 factory；
+只有唯一、受支持且证据完整的 CREATE 才进入 algorithm。Measure/MeasureContent 与
+Layout 分别找 parent 一致的 operation，核验 P2-D binding 和 DEFINE/source signature。
+最终通过 definition 开头受支持 preamble 中目标 token 的唯一 P1 REFERENCE 关联
+同 component LayoutProperty。直接 supporting CALL 只记录一跳，不递归追踪；循环也
+仅保留原边一次。缺事实/unsupported 停止相关阶段；候选冲突返回 ambiguous；候选/
+CALL 预算截断报告 gap 与 `exhaustive=False`，不能把截断后的一个候选当唯一完整。
+
+### Acceptance Criteria 对照
+
+| # | 实现 / 验证依据 |
+|---|---|
+| 1 | 原创 C++ fixture 通过真实 clangd → P1 → graph → domain → framework → trace 验证三个完整片段 |
+| 2 | CREATE 必须是原 P2-D 边，且所有 supporting generic edges 仍在输入 graph；缺 CALL/REFERENCE/DEFINE 不从 index 补回 |
+| 3 | MEASURE 与 LAYOUT 保持 algorithm → method 的不同 binding；两种 definition 独立核验；声明不能冒充实现 |
+| 4 | 精确 token REFERENCE + operation source preamble + property role/component；synthetic 两操作各有依赖，真实 Button Measure 有依赖 |
+| 5 | 原 GraphNode anchors、parent/role、binding/source hash、原方向 CALL/REFERENCE/DECLARE/DEFINE，以及 candidate evidence |
+| 6 | 缺 stage/edge/definition/role、unsupported、identity/role conflict、预算截断均显式；逆序 rebuild/持久化往返结果稳定 |
+| 7 | 只读真实 Button pipeline，以及 Text/Menu 的冻结失败边界；按源码预期验证，不用 actual 反填 expected |
+
+### Validation
+
+开发阶段仅运行 P2-G unit / synthetic；之后执行 real smoke，补齐相关负例，再冻结代码/
+测试并执行一次最终 `scripts/run_tests.py --require-arkui`。
+
+```powershell
+$env:PYTHONPATH='src'
+# ARKUI_REPO_ROOT 使用用户提供的外部路径，通过进程环境显式配置。
+py -3 -W error::ResourceWarning -m unittest tests.unit.graph.test_layout tests.integration.test_layout_trace.SyntheticLayoutTests -v
+py -3 -W error::ResourceWarning -m unittest tests.integration.test_layout_trace.RealLayoutSmokeTests -v
+py -3 -W error::ResourceWarning scripts/run_tests.py --require-arkui
+git diff --check
+git diff --cached --check
+git apply --reverse --check var/review/p2-g.patch
+```
+
+最新 unit + synthetic：22/22（10.937s）；成功 real smoke：1/1（78.734s），20 个源码
+位置检查，20 个文件 hashes 一致。首次 query 前冻结的三个 expected 均匹配。
+完整代码/config freeze：`var/validation/p2-g-code-freeze.json`，共 95 个文件。
+最终全量：286/286（535.325s），baseline 8/8，无 skips、expected failures 或 ResourceWarning。
+95/95 freeze hashes 校验一致；最终 full validation 启动后无代码/测试/config 修改。
+AC 1–7 全部满足；真实 incomplete/ambiguous 与冻结源码边界一致，不代表恢复了完整
+运行时 layout pipeline。外部 target Git worktree 保持干净；Stop Hook 未修改/绕过，
+P2-H 及其他 milestone 状态未改动。所有派生报告与 patch 仅写入 ignored `var/`。
+
+报告：`var/validation/p2-g-layout-smoke.json`；最终日志：
+`var/validation/p2-g-final-validation.log`；独立可 review diff：`var/review/p2-g.patch`。
+
+首次 real smoke 与一次带 faulthandler 的诊断重跑因既有 P1 adapter 的 close-notification
+管道阻塞而中止（栈为 `clangd.py:130 _write ← close:378`），不计作通过。P2-G 真实
+采集切片限定 factory allocation CALL 与 operation DEFINE/REFERENCE/parent；synthetic
+仍采集并验证 operation CALL。没有修改 P1 adapter、mock provider、跳过真实组件或
+改变冻结 expected。真实 smoke 不声称已枚举 Measure/Layout 的完整 callee inventory。
 
 ---
 

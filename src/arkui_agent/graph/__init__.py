@@ -36,6 +36,10 @@ from arkui_agent.graph.property import (
     PropertyBinding, PropertyBounds, PropertyNode, PropertyPath, PropertyStage,
     PropertyStatus, PropertyTrace, trace_property_update,
 )
+from arkui_agent.graph.layout import (
+    LayoutBounds, LayoutDependency, LayoutNode, LayoutStage, LayoutStageResult,
+    LayoutStatus, LayoutTrace, trace_measure_layout,
+)
 
 __all__ = [
     "Direction", "EdgeIdentity", "GraphEdge", "GraphNode", "GraphQuery",
@@ -50,4 +54,6 @@ __all__ = [
     "CreationTrace", "PatternArgument", "trace_component_creation",
     "PropertyBinding", "PropertyBounds", "PropertyNode", "PropertyPath", "PropertyStage",
     "PropertyStatus", "PropertyTrace", "trace_property_update",
+    "LayoutBounds", "LayoutDependency", "LayoutNode", "LayoutStage", "LayoutStageResult",
+    "LayoutStatus", "LayoutTrace", "trace_measure_layout",
 ]

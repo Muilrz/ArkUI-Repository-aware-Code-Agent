@@ -356,3 +356,65 @@ LayoutProperty，同时报告缺入口与缺显式 property writer。两片段�
 property 声明和 consumer 源码位置，再执行真实 clangd → index → graph → role → framework
 → property query；报告 `var/validation/p2-f-property-smoke.json` 含真实 source checks、revision、
 各片段完整结果与 evidence、文件 hashes，并检查逆序 rebuild、持久化往返和重复结果相等。
+
+## P2-G：Measure / Layout Trace
+
+`trace_measure_layout(index, graph, domain, workspace, seed=..., component=..., bounds=...)`
+返回 immutable `LayoutTrace`。seed 为显式 Pattern P1 identity，component 为显式已知
+component identity；不从自然语言或同名字符串选择入口、重载或目标 algorithm。
+输入允许 partial graph：核验 scope、P1 nodes/evidence，并用 P2-D extractor 重验 binding
+语义；只有输入中存在且 supporting generic edges 全部仍存在的 binding 才可采纳。
+不会从完整 index 恢复 partial graph 缺失的 CALL、REFERENCE、DECLARE 或 DEFINE。
+
+最小 traversal 是有界的架构阶段选择：Pattern → factory → algorithm，然后分别核验
+MEASURE 和 LAYOUT 操作及其 definition，最后收集实现中的 LayoutProperty dependency。
+Pattern → factory 由 P1 METHOD parent identity 证明，没有虚构 class → method CALL。
+factory → algorithm 严格使用 P2-D CREATE（简单完整 return、唯一目标 REFERENCE、真实
+MakeRefPtr CALL/new T）；Measure/MeasureContent 与 Layout 分别使用 MEASURE/LAYOUT。
+operation binding 是 algorithm → method，**不会生成 Measure → Layout relation**。
+声明没有 definition 时保留 binding，报告缺 implementation，不把声明充作实现 stage。
+未声明的 inherited Layout 不外推，当前 P1 没有可支持该推断的 inheritance/override facts。
+
+对 P1 定位的 factory，额外允许完整有界 switch/case + MakeRefPtr return 模板提供精确
+REFERENCE 候选；它只解释候选 identity，不解析条件、不选择默认分支、不新增 CREATE。
+多 algorithm（例如真实 Menu）返回 ambiguous；任意参数/分支工厂不据此提升为可创建链。
+其他 unsupported body 停在 factory。Text 的复杂有参工厂即为该能力边界。
+
+LayoutProperty dependency 只接受 operation definition 开头受支持的直线语句序列，以及
+`auto p = [AceType::]DynamicCast<T>(layoutWrapper->GetLayoutProperty());` 的目标 token
+精确 P1 REFERENCE。允许的 preamble 为 GetHostNode/GetPattern、已审查的 null guard、
+ACE_UINODE_TRACE 和 MenuDumpInfo 声明；不跨 branch、注释、字符串、预处理或邻近方法。
+T 必须有同 component、无歧义的 LayoutProperty role；不根据 `*LayoutProperty` 名称
+猜 identity，不把文件其他位置的 reference 借过来。它证明静态类型依赖，不证明 cast
+成功、同一运行时实例或 property 值传播。缺失 reference/role 或不支持的 preamble 留 gap。
+
+结果契约：
+
+- `stages` 按 Pattern/factory/algorithm/Measure/Layout/LayoutProperty 的架构顺序保存
+  存在的阶段；每阶段保留全部已接纳候选及原 GraphNode anchors、P1 parent/role evidence。
+  缺阶段不补造占位 node；多 Measure/MeasureContent 或 Layout identity 显式 ambiguous。
+- `bindings` 保存有序 CREATE/MEASURE/LAYOUT 和原 endpoints/evidence；`support` 保存
+  原 file → symbol DECLARE/DEFINE/REFERENCE。`calls` 独立保留 factory/operation 的真实
+  一跳 outgoing CALL，包括环；不递归展开、不把 operation binding 伪装为 CALL。
+  P1 caller definition/declaration 精度不冒充 call-site，也不声称这些 CALL 连成连续路径。
+- `dependencies` 显式记录 operation identity、property identity、原 file REFERENCE 和
+  精确 preamble source range/hash；`source_evidence` 保存 factory 候选模板和 implementation
+  起始签名核验的 source range/hash。`candidates` 保存未解决 identity 和所有 role evidence。
+- `gaps` 是稳定排序的原因集合。完整唯一静态片段为 complete；缺事实/unsupported 为
+  incomplete；多候选/identity/role 冲突为 ambiguous，优先于 incomplete。
+- `LayoutBounds(max_candidates=32, max_calls=100)` 分别限制各阶段/未解决候选列表及
+  总一跳 CALL 输出。超限时 `exhaustive=False` 且明确 gap，不能返回唯一 complete；
+  已知歧义不会因截断为单候选而丢失。这些不是 P1/source 读取成本或时延预算。
+- 不展开一跳 CALL 的目标，因此不存在递归 cycle 搜索；成员选择、binding 缺失、
+  unsupported body、未解决 factory/algorithm、阶段结束或预算触顶均有确定终止条件。
+
+真实预期在 `tests/fixtures/layout_cases.py` 的 `REAL_CHECKS/REAL_EXPECTED` 中于首次 query
+前冻结。Button 恢复 Pattern → factory → ButtonLayoutAlgorithm → Measure，并取得
+ButtonLayoutProperty dependency；其 inherited Layout 留 missing_layout_binding。
+Text 停于 unsupported factory；Menu 保留 Menu/MultiMenu/SubMenu 三候选并 ambiguous。
+synthetic 原创可执行 C++ 验证完整 Measure + Layout 及各自的 property reference。
+真实采集切片包含 factory allocation CALL 与 operation DEFINE/REFERENCE/parent；
+不枚举所有 operation callees，避免既有同步 adapter 的大量 didClose 通知管道阻塞。
+synthetic 采集 operation CALL 并验证其保留；trace API 对输入中存在的 CALL 按同一规则处理。
+报告为 ignored `var/validation/p2-g-layout-smoke.json`。不改变 P1/P2-B/C/D 语义、
+不实现 Overlay、Task-driven Graph Expansion、Task Subgraph 或 Context Pack。
