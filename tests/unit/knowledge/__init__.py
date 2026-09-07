@@ -1,0 +1,1 @@
+"""Knowledge manifest contract tests."""

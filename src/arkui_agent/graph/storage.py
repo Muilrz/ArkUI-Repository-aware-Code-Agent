@@ -71,17 +71,23 @@ class GraphStore:
                 temporary.unlink(missing_ok=True)
 
     def load(self) -> GraphSnapshot:
+        return self.read_file(self.path, repository_key=self.repository_key, snapshot_key=self.snapshot_key)
+
+    @staticmethod
+    def read_file(path: str | Path, *, repository_key: str, snapshot_key: str) -> GraphSnapshot:
+        """Read an explicitly supplied prebuilt file without constructing a store."""
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
             if (not isinstance(payload, dict) or type(payload.get("schema_version")) is not int
                     or payload["schema_version"] != 1):
                 raise ValueError("Unsupported graph snapshot schema.")
             if payload.get("projection") != "p1-index-v1":
                 raise ValueError("Unsupported graph projection version.")
-            self._check_scope(payload["repository_key"], payload["snapshot_key"])
+            if (payload["repository_key"], payload["snapshot_key"]) != (repository_key, snapshot_key):
+                raise ValueError("Graph snapshot repository/snapshot scope mismatch.")
             return _decode(payload)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError) as error:
-            raise GraphStorageError(f"Unable to load graph snapshot: {self.path}") from error
+            raise GraphStorageError(f"Unable to load graph snapshot: {path}") from error
 
     def delete(self) -> None:
         """Delete this exact generated file; repeated deletion is safe."""

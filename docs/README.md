@@ -22,7 +22,7 @@
 
 P2-I 真实 ArkUI baseline 的 dataset、指标和命令见 [`evaluation/p2-code-graph-baseline.md`](evaluation/p2-code-graph-baseline.md)。
 
-P2 已完成并归档至 [P2 execution plan](exec-plans/completed/P2-arkui-code-graph.md)。当前执行 [P3 execution plan](exec-plans/active/P3-task-change-context.md) 的 P3-A，输入规范见 [Task / Change specs](specs/task-change-context/README.md)，标注设计见 [P3 evaluation 提纲](evaluation/p3-input-annotation-outline.md)。
+P2 已完成并归档至 [P2 execution plan](exec-plans/completed/P2-arkui-code-graph.md)。P3-A 已收口，当前执行 [P3 execution plan](exec-plans/active/P3-task-change-context.md) 的 P3-B；输入及知识读取规范见 [Task / Change specs](specs/task-change-context/README.md)，标注设计见 [P3 evaluation 提纲](evaluation/p3-input-annotation-outline.md)。
 
 当前长期能力扩展由以下架构文档共同描述：
 

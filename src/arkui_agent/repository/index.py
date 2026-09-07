@@ -73,15 +73,30 @@ class TestedSymbolMapping:
 class SymbolIndex:
     """Persist and query exact P1 model facts using opaque symbol identities."""
 
-    def __init__(self, database_path: str | os.PathLike[str]) -> None:
+    def __init__(self, database_path: str | os.PathLike[str], *, read_only: bool = False) -> None:
         if isinstance(database_path, str) and not database_path.strip():
             raise SymbolIndexError("Symbol index database path must not be empty.")
         self.database_path = Path(database_path).expanduser().resolve(strict=False)
+        if type(read_only) is not bool:
+            raise SymbolIndexError("read_only must be a bool.")
+        if read_only and any(Path(str(self.database_path) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+            raise SymbolIndexError("Read-only snapshot requires a sealed database without sidecars.")
         self._closed = False
+        self.read_only = read_only
         try:
-            self._storage = SQLiteSymbolStorage(self.database_path)
+            self._storage = SQLiteSymbolStorage(self.database_path, read_only=read_only)
         except SQLiteSymbolStorageError as exc:
             raise SymbolIndexError(str(exc)) from exc
+
+    @classmethod
+    def open_read_only(cls, database_path: str | os.PathLike[str]) -> SymbolIndex:
+        """Open a sealed existing database without schema creation or migration.
+
+        The caller must ensure the file stays immutable for the read lifetime.
+        Live SQLite journals/WAL are not supported by this snapshot reader.
+        """
+        path = Path(database_path).expanduser().resolve()
+        return cls(path, read_only=True)
 
     @classmethod
     def in_runtime_directory(
@@ -105,6 +120,8 @@ class SymbolIndex:
         """Atomically replace the index with one unified-model snapshot."""
 
         self._require_open()
+        if self.read_only:
+            raise SymbolIndexError("Cannot rebuild a read-only symbol index.")
         symbol_by_identity = _unique_symbols(symbols)
         facts_by_identity = _merge_semantic_facts(semantic_facts)
         fixture_by_identity = _unique_test_fixtures(test_fixtures)

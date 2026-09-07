@@ -153,9 +153,21 @@ CREATE INDEX IF NOT EXISTS test_symbol_references_by_symbol
 class SQLiteSymbolStorage:
     """Store primitive index records without exposing SQLite to index users."""
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, *, read_only: bool = False) -> None:
         self.database_path = database_path
         try:
+            if read_only:
+                self._connection = sqlite3.connect(database_path.as_uri() + "?mode=ro&immutable=1", uri=True)
+                self._connection.row_factory = sqlite3.Row
+                self._connection.execute("PRAGMA query_only = ON")
+                version = self._connection.execute(
+                    "SELECT value FROM metadata WHERE key = 'schema_version'"
+                ).fetchone()
+                if version is None or version[0] != str(SCHEMA_VERSION):
+                    raise sqlite3.DatabaseError("Unsupported read-only symbol index schema.")
+                if self._connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                    raise sqlite3.DatabaseError("Symbol index integrity check failed.")
+                return
             database_path.parent.mkdir(parents=True, exist_ok=True)
             self._connection = sqlite3.connect(database_path)
             self._connection.row_factory = sqlite3.Row
@@ -167,6 +179,8 @@ class SQLiteSymbolStorage:
             )
             self._connection.commit()
         except (OSError, sqlite3.Error) as exc:
+            if hasattr(self, "_connection"):
+                self._connection.close()
             raise SQLiteSymbolStorageError(
                 f"Unable to open symbol index database: {database_path}"
             ) from exc

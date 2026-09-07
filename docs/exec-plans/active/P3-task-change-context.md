@@ -1,7 +1,7 @@
 # P3 — Task / Change Retrieval & Context Builder
 
 - **Phase Status:** In Progress
-- **Planning:** 当前仅执行 P3-A；不启动 P3-B 或 retrieval。
+- **Planning:** 当前仅执行 P3-B；不启动 P3-C 或 retrieval。
 - **Phase Goal:** 复用 P1/P2，将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
 - **Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)，重点为 §4–6。
 - **Phase Boundary / Definition of Done:** [Phase map §6](../phase-map.md#6-p3--task--change-retrieval--context-builder)。
@@ -10,7 +10,7 @@
 
 ## Authority and planning decisions
 
-本文件定义拟实施范围和验收门槛，不把规划字段当作已实现 API。各 milestone 实现时将行为、类型、不变量及失败语义写入 `docs/specs/task-change-context/`；共享知识契约写入 `docs/specs/repository-knowledge/`。不创建空 spec 或复制 P2 contract。完成后本计划只保留范围、验收索引和简要结果。
+本文件定义拟实施范围和验收门槛，不把规划字段当作已实现 API。各 milestone 实现时将行为、类型、不变量及失败语义写入 `docs/specs/task-change-context/`；P3-B 共享知识读取契约统一见其中的 `knowledge-snapshot-v1.md`。不创建空 spec 或复制 P2 contract。完成后本计划只保留范围、验收索引和简要结果。
 
 核对结果：roadmap 与 phase-map 的 P3 能力边界一致，没有需要重写总体架构的冲突。存在以下文档状态差异：
 
@@ -103,7 +103,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 ## P3-A — Task / Change Representation and Parsing Boundary
 
-- **Status:** In Progress
+- **Status:** Completed
 - **Goal:** 建立共享 typed 输入，使后续检索无需重新解释原始请求和 diff 坐标。
 - **Dependencies:** P1/P2 completed；输出供 B、C1/C2 使用。
 - **Scope:** 自然语言 Task 的原文、显式/提取 hints（component、symbol、property、action、test intent）及提取来源；结构化 Task；平台无关 Change 的 base/head、files/hunks/ranges、change kind/provenance；受支持 unified diff 解析、坐标规范化、错误与 unresolved 模型。有限 deterministic 解析，未知自然语言保留全文供 text retrieval。
@@ -112,11 +112,11 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** Task/Change 均可 round-trip；输入来源与 hint 不混淆为 repository fact；old/new 侧明确；rename/add/delete、零长度 insertion/deletion range 可表达；不支持 binary/combined diff 以显式状态保留而非误解析；路径逃逸与非法范围拒绝；不要求 index/clangd/LLM 才能解析输入。
 - **Tests / real validation:** 更新纯模型与 parser tests，覆盖中文 Task、未知组件、overload hint、多文件多 hunk、缺 revision、非法 diff。真实验证仅人工检查所选 P2 case 的 Task 输入及可复现 Change 输入设计，不运行 baseline；本 milestone 不以真实 retrieval 成功为 AC。
 - **Known Limitations:** 不承诺通用自然语言意图理解；PR/commit 数据必须由外部转换为平台无关输入。
-- **Implementation / acceptance:** 输入实现位于 `arkui_agent.context`；contract 见 [input v1](../../specs/task-change-context/input-v1.md)，测试为 `tests/unit/context/test_inputs.py` 与 `test_diff_parser.py`，标注提纲见 [P3 input annotations](../../evaluation/p3-input-annotation-outline.md)。实现和测试已编写；本次 trusted Stop Hook 验证及人工输入设计复核尚待确认，保持 In Progress。
+- **Implementation / acceptance:** 输入实现位于 `arkui_agent.context`；contract 见 [input v1](../../specs/task-change-context/input-v1.md)，标注提纲见 [P3 input annotations](../../evaluation/p3-input-annotation-outline.md)。Stop Hook 已验证两个 input/parser 模块的 20 个测试通过；用户已接受当前输入设计，P3-A 收口。
 
 ## P3-B — Knowledge Snapshot Read Contract and Freshness
 
-- **Status:** Not Started
+- **Status:** In Progress
 - **Goal:** 在第一条多通道查询前确保所有 evidence 有一致且可核验的知识来源。
 - **Dependencies:** A；为 C1–H 提供绑定接口，F 复用同一 manifest。
 - **Scope:** typed manifest、repository/revision/build scope 身份、freshness evaluation、读取和验证显式预构建 artifacts、query session binding、source revision/hash 检查；last usable 与 latest attempt 分离。
@@ -125,6 +125,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** 五种 freshness 语义可区分；old index/new graph 或未知 revision 不得 fresh；dirty/source drift 明确拒绝或降级；覆盖范围不足区别于 stale；合法预构建 snapshot 可绑定并供查询复用；缺失/损坏 manifest 不能静默产生空 fresh snapshot；状态和诊断可序列化。
 - **Tests / real validation:** 临时 Git repository 的 revision transition、dirty source、混合 artifact、工具/规则配置变化、scope mismatch、读取期间变化；人工核对 P2 fixture preparation scope 可被 manifest 表达。真实大仓库 refresh 尚非本 milestone 验收条件。
 - **Known Limitations:** 不负责生产已有 index 的 revision 证明；没有可信 manifest 的遗留 artifact 为 unknown，需要 F rebuild 或显式验证流程。
+- **Implementation / acceptance:** `arkui_agent.knowledge` 实现 manifest、freshness、prebuilt read adapter 与固定 generation session；contract 见 [knowledge snapshot v1](../../specs/task-change-context/knowledge-snapshot-v1.md)。已新增纯模型和 temporary Git/P1/P2 tests；已核对 P2 preparation 可表达为 selected-files scope。等待本次 trusted Stop Hook targeted 结果，保持 In Progress。
 
 ## P3-C1 — Multi-channel Candidate Retrieval
 
@@ -263,7 +264,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 遵循当前 AGENTS.md：开发时新增/更新行为测试，但 Codex 不主动执行测试命令；trusted Stop Hook 仅运行工作树新增/修改的 `test_*.py`。Hook 不可用或未 trusted 必须报告未验证，不手动补跑。任何本计划列出的真实 ArkUI smoke/baseline、全仓 refresh 验收、strict full 和昂贵验证均由用户显式触发；未执行的必需项保留待验收，不能提前将 milestone 设 Completed。
 
-规划 session 仅做文档整理与 `git diff --check`。当前 P3-A 开发不主动运行测试或 P2 baseline，等待本次 trusted Stop Hook 的 targeted 结果；不导出 patch、逐命令日志或新的 runtime snapshot。
+开发 session 不主动运行测试或 P2 baseline，等待本次 trusted Stop Hook 的 targeted 结果；不导出 patch、逐命令日志或新的 runtime snapshot。
 
 ## P3 Definition of Done traceability
 
@@ -281,6 +282,6 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 | 10 context metrics | C1–H 持续标注/验证；I 汇总 |
 | 11 bounded graph/source context | C1、D、E、H；I |
 
-## Current session: P3-A only
+## Current session: P3-B only
 
-当前仅实现 A 的 typed Task/Change model、有限 parser、序列化/输入错误、old/new range 语义、对应 spec 与 tests。只将 P3-A 和 Phase 设为 In Progress；不实现 retrieval、KnowledgeSnapshot build、Graph Expansion 或 Context Pack，不自动进入 B。若必需 Hook 验证未通过或未执行，保持 In Progress 并报告。
+当前仅实现 B 的 manifest、validation、freshness 与只读 binding；P3-A 已通过 targeted tests 且用户接受输入设计。Phase 保持 In Progress，不实现 rebuild、P3-C retrieval 或后续能力。B 的必需 Hook 验证未通过或未执行时保持 In Progress；通过后仅收口 B，不自动进入 C。
