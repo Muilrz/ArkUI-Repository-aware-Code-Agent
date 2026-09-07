@@ -956,7 +956,7 @@ P2-H 及其他 milestone 状态未改动。所有派生报告与 patch 仅写入
 
 # P2-H — Overlay Show / Close Trace
 
-- **Status:** Not Started
+- **Status:** Completed
 
 ## Goal
 
@@ -1017,6 +1017,88 @@ Close
 5. 不存在 animation evidence 时不虚构 animation node。
 6. 至少选择真实 ArkUI overlay-related component 做 validation。
 7. 多条 close path 可明确表达。
+
+## P2-H Implementation / Frozen Expectations
+
+实现 `graph/overlay.py` 的 `trace_overlay` 与 immutable Show/Close 独立结果，复用 P2-B
+generic graph、P2-C OverlayManager identity、P2-D SHOW/CLOSE entry binding；不新增
+operation relation、role catalog 或 P1 语义。contract 详见 `graph-contract.md` P2-H。
+入口、manager、component 显式指定；这是静态 Menu API family 的配对，不证明同一 runtime
+node、manager instance 或 Show/Close 执行先后。不存在源码创建证据时不补 CREATE。
+
+首次 query 前审查并冻结 revision `0096f5bd943ed1f7fa56883aed0e2379f13c2885` 的以下事实。
+位置以 `frameworks/core/components_ng/` 为前缀；18 个 source checks 见
+`tests/fixtures/overlay_cases.py`，每次在语义采集和 query 前校验。
+
+| 场景 | 冻结源码路径 | Expected / actual |
+|---|---|---|
+| Menu Show | `base/view_abstract.cpp:5403` BindMenuWithItems，经 `:5446` 调用 OverlayManager::ShowMenu；manager `.cpp:1623/1630` 为实现及 modifier->showMenu | entry → manager → operation → managed_node_type；incomplete，`unsupported_manager_body` |
+| Menu Close / view | `base/view_abstract.cpp:5385` CloseMenu，经 `:5399` 调用 OverlayManager::HideMenu；manager `.cpp:1684/1693` 为实现及 modifier->hideMenu | 同上，单 path incomplete |
+| Menu Close / pattern | `pattern/menu/menu_pattern.cpp:1070` HideMenu(bool,...)，经 `:1113` 调用同一 manager HideMenu | 同上，单 path incomplete；Close 集合保留两条路径，ambiguous |
+
+manager header `pattern/overlay/overlay_manager.h:198/199` 保留 SHOW/CLOSE domain binding
+及同一 P1 method 声明参数的 FrameNode 精确 REFERENCE；node stage 表示静态参数类型。
+MenuPattern::HideMenu 在 header 另有 inline overload，显式以预审 `.cpp:1070` definition
+定位目标，不能按 qualified name 排序选择。所有真实 path animation 均为 unresolved，
+总结果 ambiguous，两个 leg 在给定 seeds / graph 上 exhaustive=True。
+
+独立下游源码观察：`pattern/menu/menu_manager.cpp:1195` GetPattern<MenuWrapperPattern>，
+`:1263` ShowMenuAnimation，`:1416` PopMenuAnimation，`:1095` AnimationUtils::Animate；
+`:1137/1154` HideAllMenusWithoutAnimation 及 RemoveChildWithService。动画存在和无动画关闭
+分支均已记录，但不跨未解析 modifier dispatch 放入 trace。MenuWrapperPattern 为既有
+catalog unknown，不用 MenuPattern 替代。另审查 DialogPattern::PopDialog → CloseDialog；
+其 dispatch 与 operation 未被现有 P2-D 模板支持，本次不扩展 Dialog/Lifecycle 分析。
+
+Traversal 对每个 leg 先反向可达过滤，再枚举显式 seed → manager semantic child method
+的真实 CALL simple paths，到 ShowMenu/HideMenu 即停止入口 traversal。binding 独立核验，
+有边/源码缺口仍返回已知片段。默认每个 leg 深度 8、paths 32、states 1000；cycle/预算
+cut 明确 gaps 与 exhaustive=False。多路径或 identity/role 冲突为 ambiguous，未知或缺失
+为 incomplete，不从完整 P1 index 补回 partial graph 缺边，也不将排序作为路径选择。
+
+Pattern tail 限定完整 tiny body 的 GetPattern<T> / direct member CALL，并同时核验
+REFERENCE、P2-C role、semantic parent。可选 Animate 还需精确 P1 METHOD identity、
+权威声明位置及真实 CALL。没有直接动画的完整 tiny body 不造动画 stage；unsupported
+body 则 unresolved，不宣称运行时无动画。original generic/domain evidence、source hashes、
+候选、缺口和 ordered stages 均保留，P1 caller location 不冒充 call-site。
+
+### Acceptance Criteria 对照
+
+| # | 实现 / 验证依据 |
+|---|---|
+| 1 | 原创可执行 C++ 经真实 clangd → P1 → generic graph → role → framework → trace；有/无直接动画均恢复完整静态片段 |
+| 2 | SHOW/CLOSE 显式保存于每个 path.binding；入口 CALL 与 domain binding 分开，缺任一证据有独立负例 |
+| 3 | 复用 P2-C shared OverlayManager entity 和 P1 opaque identity；unknown/role conflict 保留 candidate evidence |
+| 4 | Show/Close 各自 nodes/calls/binding/support/source_evidence；验证 anchors、parent、原边 provenance、source hash、GraphStore 往返及逆序 rebuild |
+| 5 | 无动画 fixture 不生成 animation stage；假名字、错误 identity、缺 REFERENCE/CALL、分支或附近源码均不能补造 |
+| 6 | 真实 Menu Show 与两类 Close entry 使用冻结 source checks；modifier dispatch 边界与源码一致 |
+| 7 | 同一 synthetic Close seed 的两条实际 CALL paths，以及真实两个 Close seeds，均保留并 ambiguous；depth/state/path/cycle 截断明确报告 |
+
+### Validation
+
+PowerShell：设置 `PYTHONPATH=src`，真实验证通过显式 `ARKUI_REPO_ROOT` 指向只读 target。
+
+```powershell
+py -3 -W error::ResourceWarning -m unittest tests.integration.test_overlay_trace.SyntheticOverlayTests -v
+py -3 -W error::ResourceWarning -m unittest tests.unit.graph.test_overlay tests.integration.test_overlay_trace.SyntheticOverlayTests -v
+py -3 -W error::ResourceWarning -m unittest tests.unit.graph.test_overlay.OverlayTests.test_same_named_entry_overloads_keep_explicit_identities -v
+py -3 -W error::ResourceWarning -m unittest tests.integration.test_overlay_trace.RealOverlaySmokeTests -v
+py -3 -W error::ResourceWarning scripts/run_tests.py --require-arkui
+```
+
+开发 targeted：初版 synthetic 2/2；unit + synthetic 21/21，补例后 26/26（7.826s）。
+单重载负例曾因测试使用不存在的 Symbol.name 字段失败，修正为 qualified_name 后 1/1。
+前两次真实 smoke 分别暴露 seed 重载不唯一、definition 参数 REFERENCE 缺失，不计通过；
+修正为冻结 definition anchor，以及同一 opaque method 的声明/实现参数证据后，真实 smoke
+1/1（46.571s）通过。诊断观察到 FrameNode references 返回 997 条、包含声明参数而缺目标
+实现参数；未修改 P1 adapter，也未反填 expected。增加声明/实现冲突与缺引用负例后重跑
+相关 P2-H 小测试。18 个冻结 checks 全部吻合，真实 source 文件 hashes 与 target Git 未变。
+
+最终全量仅执行一次：313/313（566.412s），真实 retrieval baseline 8/8；无 skips、
+expected failures 或 ResourceWarning。启动后未修改代码/测试/config，104/104 会话内存
+freeze hashes 复核一致；外部 target Git worktree 干净且 revision 未变。AC 1–7 与所有
+必需验证通过，P2-H 标记 Completed。最终验证后仅更新本节状态和结果，不需要重跑 full。
+仅保留测试消费的 ignored `var/validation/p2-h-overlay-smoke.json`；review 使用 Git diff，
+不生成独立 patch、freeze 文件或逐命令日志。P2-I 保持 Not Started，不实现通用 Lifecycle/P3。
 
 ---
 

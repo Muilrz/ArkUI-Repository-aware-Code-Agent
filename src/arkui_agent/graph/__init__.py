@@ -40,6 +40,10 @@ from arkui_agent.graph.layout import (
     LayoutBounds, LayoutDependency, LayoutNode, LayoutStage, LayoutStageResult,
     LayoutStatus, LayoutTrace, trace_measure_layout,
 )
+from arkui_agent.graph.overlay import (
+    OverlayAnimation, OverlayBounds, OverlayLeg, OverlayNode, OverlayPath, OverlayStage,
+    OverlayStatus, OverlayTrace, trace_overlay,
+)
 
 __all__ = [
     "Direction", "EdgeIdentity", "GraphEdge", "GraphNode", "GraphQuery",
@@ -56,4 +60,6 @@ __all__ = [
     "PropertyStatus", "PropertyTrace", "trace_property_update",
     "LayoutBounds", "LayoutDependency", "LayoutNode", "LayoutStage", "LayoutStageResult",
     "LayoutStatus", "LayoutTrace", "trace_measure_layout",
+    "OverlayAnimation", "OverlayBounds", "OverlayLeg", "OverlayNode", "OverlayPath", "OverlayStage",
+    "OverlayStatus", "OverlayTrace", "trace_overlay",
 ]

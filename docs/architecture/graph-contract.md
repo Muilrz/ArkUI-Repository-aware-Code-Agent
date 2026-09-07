@@ -418,3 +418,82 @@ synthetic 原创可执行 C++ 验证完整 Measure + Layout 及各自的 propert
 synthetic 采集 operation CALL 并验证其保留；trace API 对输入中存在的 CALL 按同一规则处理。
 报告为 ignored `var/validation/p2-g-layout-smoke.json`。不改变 P1/P2-B/C/D 语义、
 不实现 Overlay、Task-driven Graph Expansion、Task Subgraph 或 Context Pack。
+
+## P2-H：Overlay Show / Close Trace
+
+`trace_overlay(index, graph, domain, workspace, manager=..., component=..., show_seed=...,
+close_seeds=(...), bounds=...)` 返回 immutable `OverlayTrace`。入口与 manager 必须是完整
+P1 NodeIdentity；同名 overload 不合并。component 使用 P2-C identity。首版范围为现有
+P2-D Menu API family，Show/Close 由调用方显式配对，不证明同一运行时 manager/node 实例。
+不自动发现 entry、不推导通用 Lifecycle，也不增加 Dialog operation 模板或 role catalog。
+
+Show 与 Close 各自枚举 seed → operation 的真实 P1 CALL。operation 必须是选定 manager
+的 P1 METHOD semantic child，分别核对 ShowMenu/HideMenu；类本身的身份由 P2-C
+OverlayManager role 证明。先反向可达过滤，再按 canonical edge 顺序、per-path visited
+枚举 simple paths；排序仅用于重现，不用于选优。到达 operation 即停止入口 CALL traversal。
+缺入口/manager/operation/edge、unsupported body 或 role/identity 冲突均保留诊断。
+
+输入 graph 可为 partial snapshot：核验 scope、P1 nodes/edge evidence，重验 P2-D extractor
+的 SHOW/CLOSE 语义，且 binding 与全部 supporting generic edges 必须仍在输入中。
+SHOW/CLOSE 始终是 **manager class → operation entry binding**，不是发生了调用。
+不会从 index 补回传入 graph 缺失的边，不会把 Show → Close 连成虚构的时间顺序 CALL。
+
+managed association 的最小源码规则：
+
+- operation 必须有真实 DEFINE 与源码起始签名。`RefPtr<FrameNode> [&] menu` 参数 token
+  的精确 P1 REFERENCE 可来自该同一 opaque method identity 的 definition，或有 DECLARE
+  支持的 declaration；保留二者 source range/hash 与原 REFERENCE，不借用同文件其他引用。
+  两处指向不同 identity 时 ambiguous。目标必须为 P1 CLASS、精确 qualified name
+  `OHOS::Ace::NG::FrameNode`，并由 `base/frame_node.h` 的 class 定义/声明锚定。
+  stage 名为 `managed_node_type`，只证明参数类型，不创造 FrameNode instance identity/CREATE。
+- 可选 Pattern tail 仅支持完整 tiny body：menu null guard、
+  `auto p = menu->GetPattern<T>()`、p null guard、`p->Method()`，随后可有一条直接 Animate。
+  T 必须有精确 P1 REFERENCE 与同 component、唯一的 Pattern role；Method token 必须
+  唯一指向该 Pattern semantic child METHOD，且 operation → method 有真实 P1 CALL。
+  node/Pattern association 为静态类型关联，不推断 GetPattern 成功或 runtime object flow。
+- 可选 `AnimationUtils::Animate(optionIdentifier, callbackIdentifier)` 必须有精确 token
+  REFERENCE 和 operation → Animate 的真实 CALL；目标 METHOD 的 qualified name 为
+  `OHOS::Ace::AnimationUtils::Animate`，声明位于 `render/animation_utils.h`。同名函数、
+  注释、附近函数、分支内代码、lambda 或 modifier dispatch 都不能代替这些证据。
+- 完整支持的 body 无该直接调用：animation=`not_observed_in_supported_body`，不造 animation
+  stage，也不声称传递调用没有动画。unsupported body：`unresolved`；可靠直接证据：`present`。
+
+结果契约：
+
+- `OverlayTrace` 保留 scope、manager/component、ruleset `p2.overlay.v1`、静态配对边界与总 status。
+  `show` / `close` 为独立 `OverlayLeg`，各含 operation、seeds、paths、status、gaps、exhaustive。
+- 每条 `OverlayPath.nodes` 按 entry/support → manager → operation → managed_node_type →
+  可选 Pattern → 可选 animation 的架构顺序保存已证实节点及 P1 anchor/parent/P2-C role evidence。
+  `calls` 只保存连续 entry → operation CALL，`binding` 独立保存原 SHOW/CLOSE。
+  `support` 保存原方向的 DECLARE/DEFINE/REFERENCE 与可选 tail CALL；不生成阶段间伪边。
+- `source_evidence` 保存精确 signature/body range 与 LF-normalized source hash；末尾重读核验
+  源码没有在 query 中变化。原 P1 CALL 的 caller location 不冒充精确 call-site。
+  `candidates` 保留未解决 identity 和全部 role candidate evidence，`gaps` 保留稳定原因码。
+- 唯一、无 gap 且穷尽的静态片段为 complete；缺事实、unsupported 或截断为 incomplete；
+  多条真实路径或 identity/role/component 冲突为 ambiguous，优先于 incomplete。
+  每条 path 有自身 status；两个完整 close paths 的 close leg 仍为 ambiguous。
+- `OverlayBounds(max_depth=8, max_paths=32, max_states=1000)` 对每个 leg 分别限制 CALL
+  深度、返回 paths 与 forward states；cycle/depth/path/state cut 均给 gap 和 `exhaustive=False`。
+  exhaustive 仅相对于传入 graph 和显式 seeds，不宣称覆盖仓库全部 Close 入口或 runtime paths。
+  P1/source 核验、反向可达和局部 identity evidence 收集不属于该输出预算。
+
+真实源码预期冻结于 `tests/fixtures/overlay_cases.py`，revision
+`0096f5bd943ed1f7fa56883aed0e2379f13c2885`。Show：ViewAbstract::BindMenuWithItems →
+OverlayManager::ShowMenu。两条 Close：ViewAbstract::CloseMenu / MenuPattern::HideMenu(bool,...)
+→ OverlayManager::HideMenu。manager 参数 FrameNode 可由声明 REFERENCE 证明；两个 operation
+均转入 modifier function-pointer dispatch，故所有 path 均在 managed_node_type 后报告
+`unsupported_manager_body`，Show incomplete，Close 和总结果 ambiguous。MenuPattern 重载
+用预先审查的 `.cpp:1070` definition 选中，不按名字或排序挑选。
+
+源码下游确有 MenuWrapperPattern、ShowMenuAnimation、PopMenuAnimation、AnimationUtils::Animate，
+也有 HideAllMenusWithoutAnimation 的 RemoveChild 路径；这些作为独立 source observations
+记录，不能跨未解析 modifier dispatch 冒充已恢复 Pattern/animation stage。MenuWrapperPattern
+在现有 P2-C 为 unknown。Dialog::PopDialog/CloseDialog 经审查也涉及 dispatch，且不属于
+当前 SHOW/CLOSE 模板，未扩展本版支持范围。原创可执行 C++ 经真实 clangd 验证有/无直接
+动画的完整片段，以及一个 Close seed 的两条真实 CALL paths。
+
+真实采集器读取实现与 header，保留 document symbol 的 P1 parent/definition；用 manager
+Show/Hide 的 incoming calls 采集入口边，避免枚举无关 entry callee inventory。每次 query
+前先检查冻结源码位置；验证 GraphStore 往返、逆序 P1 rebuild、重复结果相等与源文件 hashes。
+仅输出 ignored `var/validation/p2-h-overlay-smoke.json` 供真实验收消费，不保存额外 patch、
+freeze 或逐命令日志，不改变 P1/P2-B/C/D 语义，也不进入 P2-I 或 P3。

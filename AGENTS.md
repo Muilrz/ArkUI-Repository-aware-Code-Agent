@@ -123,3 +123,15 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 - `compile_commands.json` 等大型外部构建派生产物。
 
 不要重写既有 Git history。
+### Runtime Artifact Discipline
+
+- 不要为每个 milestone 自动生成或长期保存独立 `.patch`、diff snapshot、`before` snapshot、`code-freeze` 文件或逐命令测试日志。
+- Code review 默认使用当前 Git 状态与 `git diff` / `git diff --check`；仅当任务明确要求导出 patch 时才创建 `.patch` 文件。
+- 开发过程中的 probe、临时诊断结果和中间测试输出默认只用于当前执行，不持久化到 `var/`。
+- `var/` 只保留确有工程用途、可由明确项目流程消费的运行产物，例如：
+  - evaluation / benchmark 输出；
+  - Symbol Index、Graph snapshot 等明确设计为可重建的 runtime data；
+  - Stop Hook 使用的最新 validation 结果；
+  - execution plan 或测试明确要求用于真实仓库验收的机器可读 smoke / validation report。
+- 如果最终报告中的文字即可完整表达验证结果，则不要额外生成同内容的 JSON / log 文件。
+- 所有 `var/` 运行产物均视为可重建数据，不应提交 Git，除非项目文档明确规定例外。
