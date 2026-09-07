@@ -1,6 +1,6 @@
 # P2 — ArkUI Code Graph
 
-- **Phase Status:** In Progress
+- **Phase Status:** Completed
 - **Phase Goal:** 在 P1 Repository Intelligence 的通用 C++ facts 上建立可追溯、可查询的 ArkUI framework-aware graph 和 domain traces。
 - **Architecture:** [`docs/architecture/code-graph-architecture.md`](../../architecture/code-graph-architecture.md)
 - **Specifications:** [`docs/specs/code-graph/`](../../specs/code-graph/README.md)
@@ -32,7 +32,7 @@ P2 不负责 Task Parser、task-driven graph expansion、Context Ranking/Pack、
 | P2-F Property Update Trace | Completed | [Property update trace](../../specs/code-graph/traces/property-update.md) |
 | P2-G Measure/Layout Trace | Completed | [Measure/layout trace](../../specs/code-graph/traces/measure-layout.md) |
 | P2-H Overlay Show/Close Trace | Completed | [Overlay trace](../../specs/code-graph/traces/overlay-show-close.md) |
-| P2-I Real ArkUI Validation & P2 Baseline | Not Started | 本计划 |
+| P2-I Real ArkUI Validation & P2 Baseline | Completed | 本计划 |
 
 ---
 
@@ -292,7 +292,7 @@ Layout runtime execution、inheritance/virtual dispatch 推断、rendering、per
 
 # P2-I — Real ArkUI Graph Validation & P2 Baseline
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Dependencies:** P2-E、P2-F、P2-G、P2-H
 
 ## Goal
@@ -342,6 +342,10 @@ py -3 -W error::ResourceWarning scripts/run_tests.py --require-arkui
 
 如最终全量启动后修改代码、测试或 validation config，必须重新执行。运行报告属于 ignored runtime/evaluation data，不提交 index、graph snapshot、target-derived data 或逐命令日志。
 
+## Completion Evidence
+
+统一 command、dataset、指标与 failure taxonomy 见 [P2 baseline](../../evaluation/p2-code-graph-baseline.md)。revision `0096f5bd943ed1f7fa56883aed0e2379f13c2885` 的真实运行 18/18 case 符合冻结 expected；relation coverage 为 64/83，Call Chain Accuracy 为 2/14，19 条 missing relation、0 条 incorrect relation，所有 case provenance 验证通过。最终 strict full 运行 318 tests，全部通过。
+
 ---
 
 # P2 Definition of Done
@@ -363,3 +367,7 @@ Creation | Property | Measure/Layout | Overlay Traces
 ## Deferred Capability
 
 长期路线中的 Create → Attach → Modify → Layout → Detach 通用 Lifecycle Trace 不属于当前 P2 Definition of Done。若后续单独实现，应建立新的 milestone 和 specification，不扩张现有 Overlay Trace。
+
+## Phase Completion Evidence
+
+P2-A～P2-I 均已 Completed。P2-I 对 Symbol/Component/Test Graph、Framework Relations 与四类 domain trace 完成统一真实 ArkUI baseline；phase-map P2 Definition of Done 的 provenance、generic/domain relation separation、bounded local expansion、人工 trace baseline 与初始 Call Chain Accuracy 均已有实现和验证。P3 尚未开始。

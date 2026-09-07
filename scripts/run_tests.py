@@ -130,6 +130,11 @@ def report_strict_failures(
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "tests",
+        nargs="*",
+        help="optional unittest module names to run instead of full discovery",
+    )
+    parser.add_argument(
         "--require-arkui",
         action="store_true",
         help=(
@@ -140,22 +145,37 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def load_requested_tests(
+    tests_root: Path,
+    project_root: Path,
+    test_names: Sequence[str],
+) -> unittest.TestSuite:
+    if test_names:
+        return unittest.defaultTestLoader.loadTestsFromNames(test_names)
+    return unittest.defaultTestLoader.discover(
+        start_dir=str(tests_root),
+        pattern="test_*.py",
+        top_level_dir=str(project_root),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     project_root = Path(__file__).resolve().parents[1]
     source_root = project_root / "src"
     tests_root = project_root / "tests"
 
+    sys.path.insert(0, str(project_root))
     sys.path.insert(0, str(source_root))
     existing_python_path = os.environ.get("PYTHONPATH")
     os.environ["PYTHONPATH"] = os.pathsep.join(
         part for part in (str(source_root), existing_python_path) if part
     )
 
-    discovered = unittest.defaultTestLoader.discover(
-        start_dir=str(tests_root),
-        pattern="test_*.py",
-        top_level_dir=str(project_root),
+    discovered = load_requested_tests(
+        tests_root,
+        project_root,
+        args.tests,
     )
     if args.require_arkui and not os.environ.get(ARKUI_REPO_ROOT):
         print(
@@ -181,6 +201,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Use --require-arkui when the milestone requires real-ArkUI validation.",
             file=sys.stderr,
         )
+        if args.tests:
+            print(
+                "VALIDATION FAILED: a targeted test was not executed",
+                file=sys.stderr,
+            )
+            return 2
 
     result, resource_warnings = run_suite(suite)
     report_strict_failures(result, resource_warnings, stream=sys.stderr)

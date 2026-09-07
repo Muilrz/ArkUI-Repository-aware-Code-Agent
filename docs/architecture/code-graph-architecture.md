@@ -1,6 +1,6 @@
 # ArkUI Code Graph Architecture
 
-本文说明 P2 ArkUI Code Graph 的稳定结构和职责边界。长期系统方向以 [`technical-roadmap.md`](technical-roadmap.md) 为准；接口和行为细节以 [`../specs/code-graph/`](../specs/code-graph/README.md) 为准；milestone 状态和验收范围以 [`../exec-plans/active/P2-arkui-code-graph.md`](../exec-plans/active/P2-arkui-code-graph.md) 为准。
+本文说明 P2 ArkUI Code Graph 的稳定结构和职责边界。长期系统方向以 [`technical-roadmap.md`](technical-roadmap.md) 为准；接口和行为细节以 [`../specs/code-graph/`](../specs/code-graph/README.md) 为准；milestone 状态和验收范围以 [已归档 P2 execution plan](../exec-plans/completed/P2-arkui-code-graph.md) 为准。
 
 ## Purpose
 

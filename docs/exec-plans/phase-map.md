@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-本文档定义 `Muil_ArkUI-UT-Agent` 的工程开发 Phase、阶段边界、入口/出口能力与 Definition of Done。
+本文档定义 **ArkUI Repository-aware Code Agent** 的工程开发 Phase、阶段边界、入口/出口能力与 Definition of Done。
 
 长期架构与技术方向以：
 
@@ -10,7 +10,7 @@
 
 为 source of truth。
 
-本文档不替代技术路线，而是把技术路线中的 Repository Intelligence、ArkUI Code Graph、Task Retrieval / Context Builder、Agent Runtime、UT Agent、Evaluation 转换为可执行的工程阶段。
+本文档不替代技术路线，而是把 Repository Intelligence、ArkUI Code Graph、Repository Knowledge Lifecycle、Task / Change Retrieval & Context Builder、Agent Runtime、Engineering Capabilities 和 Evaluation 转换为可执行的工程阶段。
 
 开发遵循三层结构：
 
@@ -34,7 +34,7 @@ Codex Task
 
 P1 Repository Intelligence 是后续系统的底层基础设施，不依赖 LLM。
 
-后续 Code Graph、Task Context Builder 和 Agent Runtime 必须建立在稳定的 repository facts 之上，而不是通过 Prompt 临时猜测代码关系。
+后续 Code Graph、Task/Change Context Builder 和 Agent Runtime 必须建立在稳定的 repository facts 之上，而不是通过 Prompt 临时猜测代码关系。
 
 ### 2.2 Separate Generic Code Facts from ArkUI Domain Knowledge
 
@@ -68,44 +68,54 @@ P2 才负责把这些事实解释成 ArkUI framework relation，例如：
 - SHOW
 - CLOSE
 
-### 2.3 Separate Retrieval from Agent Behavior
+### 2.3 Version Repository Knowledge
 
-P3 必须能够在没有 Agent 自主循环的情况下，根据 Task 构建高质量 Task Context Pack。
+Repository-derived persistent knowledge 沉淀在 index、graph、metadata 和 Knowledge Snapshot 中，而不是长期 LLM memory。
+
+P3 建立 snapshot/freshness/refresh orchestration 边界；第一版允许 revision 变化后全量 rebuild。
+
+### 2.4 Treat Task and Change as Peer Inputs
+
+P3 同时支持自然语言 Task 与平台无关的 PR/Commit/Diff Change。GitCode 私有 schema 不进入 P3。
+
+### 2.5 Separate Retrieval from Agent Behavior
+
+P3 必须能够在没有 Agent 自主循环的情况下生成高质量 Task/Change Context Pack。
 
 P4 才负责：
 
 ```text
 Planning
+→ Skill / Tool Selection
 → Tool Call
 → Observation
 → State Update
 → Re-plan
 ```
 
-### 2.4 Separate Agent Runtime from Coding Loop
+### 2.6 Separate Runtime from Engineering Capability
 
-P4 先验证 Agent 是否能正确使用 P1-P3 的能力完成只读源码分析任务。
+P4 负责通用 Agent Runtime；P5 实现 Code Review、UT Development / Repair 等具体 Engineering workflow。
 
-P5 再引入：
+P5 capability 不得各自复制 P1-P4 基础设施。
 
-- edit
-- patch
-- build
-- test
-- failure classification
-- repair loop
+### 2.7 Separate Skill, Tool and Provider
 
-### 2.5 Evaluation Starts Early
+- Skill 描述工程任务策略；
+- Tool 执行受控动作；
+- Provider/Adapter 隔离 clangd、GitCode 等外部系统私有协议。
+
+长期 polling、平台事件和 Repository Knowledge 持久化不隐藏在 Skill Prompt 中。
+
+### 2.8 Evaluation Starts Early
 
 Evaluation 不是 P6 才开始。
 
-每个 Phase 都需要同步建立本阶段指标：
-
 - P1：Retrieval metrics
 - P2：Graph / Trace metrics
-- P3：Context metrics
+- P3：Knowledge / Context metrics
 - P4：Agent runtime metrics
-- P5：Coding / Repair metrics
+- P5：Code Review + Coding / Repair metrics
 
 P6 负责正式 benchmark、ablation comparison、稳定性验证与 hardening。
 
@@ -198,9 +208,10 @@ P1 主要回答：
 - Property Update Trace
 - Measure / Layout Trace
 - Overlay Trace
-- Task Context ranking
+- Task/Change Context ranking
 - Token Budget
 - Agent planning loop
+- Code Host integration
 - Code editing
 - Build / UT repair
 
@@ -267,8 +278,10 @@ P2 回答：
 
 ## Out of Scope
 
-- Task Context ranking
+- Task/Change Context ranking
 - Token Budget
+- Knowledge refresh orchestration
+- GitCode integration
 - Agent planning
 - Code editing
 - Build / Repair
@@ -292,103 +305,89 @@ P2 回答：
 6. 有人工标注的小规模 trace baseline；
 7. 可以计算初始 Call Chain Accuracy。
 
-# 6. P3 — Task Retrieval & Context Builder
+当前 P2 execution plan 按既有 scope 收尾，不因为未来 Code Review 需求新增 GitCode、polling、ReviewFinding 或 Context Builder 工作。
+
+# 6. P3 — Task / Change Retrieval & Context Builder
 
 ## Goal
 
-把 repository 中的大量事实压缩成与当前开发任务直接相关的上下文。
+把 repository 中的大量事实压缩成与当前开发 Task 或代码 Change 直接相关的、版本可追溯的上下文。
 
 P3 回答：
 
-> 面对一个具体 Task，后续 Agent 真正需要看到哪些代码和关系？
+> 面对一个 Task 或 PR/Commit/Diff Change，后续 Agent 真正需要看到哪些代码和关系？当前上下文基于哪个 knowledge snapshot？
 
 ## In Scope
 
-- Task schema
-- Task parser
-- Component / Target Symbol / Property / Action / Test Intent extraction
-- Text Retrieval
-- Symbol Retrieval
-- Reference Retrieval
-- Test Retrieval
-- task-driven Graph Expansion
-- Task Subgraph Extraction
-- candidate ranking
-- context tiering
+- KnowledgeSnapshot / repository revision identity
+- freshness state 与 refresh result
+- manual refresh entry point
+- scheduler-invokable refresh entry point
+- 基于已有 P1/P2 能力的 refresh/rebuild orchestration
+- Task schema / parser
+- platform-neutral Change schema
+- changed file/hunk/range → changed symbol mapping
+- Text / Symbol / Reference / Test Retrieval
+- task/change-driven Graph Expansion
+- Task / Change Subgraph Extraction
+- candidate ranking / context tiering
 - Token Budget
 - Task Context Pack
+- Review/Change Context Pack
 - retrieval/context evaluation
 
 ## Out of Scope
 
 - autonomous planning loop
-- tool selection loop
+- Skill/Tool runtime
+- long-running PR polling
+- GitCode authentication/API adapter
+- review comment publishing
 - code editing
 - build
 - repair
 
 ## Definition of Done
 
-给定自然语言或结构化任务，例如：
-
-```text
-给 MenuItem selected 属性补 UT
-```
-
-系统可以在没有 Agent 自主循环的情况下生成结构化：
-
-```text
-Task Context Pack
-- Task
-- Target
-- Related Symbols
-- Call Chain
-- Source Snippets
-- Existing Tests
-- Similar Cases
-- Mock Dependencies
-```
-
-并满足：
-
-1. candidate retrieval 与 final context 分离；
-2. context 有 Tier 1 / Tier 2 / Tier 3 或等价优先级；
-3. context 有明确 Token Budget；
-4. 每个 snippet / relation 可追溯来源；
-5. 可解释为什么某候选被选入或排除；
-6. 可以评估 Relevant Context Ratio；
-7. 可以评估 Missing Dependency Rate；
-8. 可以记录 Context Token Cost。
+1. 给定自然语言/结构化 Task，可以生成结构化 Task Context Pack。
+2. 给定平台无关的 Change，可以保留 base/head revision、changed file/hunk/range provenance，并在可证明时解析 changed symbol。
+3. Task/Change 均可组合 Text/Symbol/Reference/Test/Graph retrieval。
+4. candidate retrieval 与 final context 分离，并有明确 Token Budget。
+5. 每个 snippet/relation 可追溯来源，并能解释为何被选入或排除。
+6. 可以读取 KnowledgeSnapshot identity/status 并判断 freshness。
+7. 支持显式 manual refresh，并允许 scheduler 调用同一 refresh entry point。
+8. refresh 失败时不把 partial data 静默标记为 fresh。
+9. Context Pack 记录 KnowledgeSnapshot identity。
+10. 可以评估 Relevant Context Ratio、Missing Dependency Rate、Context Token Cost。
+11. 不把整个 repository graph 或全仓代码直接塞入 LLM。
 
 # 7. P4 — Agent Runtime
 
 ## Goal
 
-让 LLM 基于 P1-P3 的能力执行多轮 repository-aware source analysis。
+让 LLM 基于 P1-P3 的共享能力执行多轮 repository-aware source analysis，并建立可供不同 Engineering Capabilities 复用的 Skill/Tool runtime。
 
 P4 回答：
 
-> Agent 如何计划、调用工具、处理 Observation、更新状态并结束任务？
+> Agent 如何计划、选择 Skill/Tool、处理 Observation、更新状态并结束任务，而不把 Code Review 或 UT workflow 写死进 runtime？
 
 ## In Scope
 
-- tool contract
+- tool contract / registry / executor
+- skill contract / registry / invocation
 - planner
-- tool executor
 - agent state
-- observation
-- state update
-- re-plan
-- retry
-- stop condition
-- iteration limit
+- observation / state update
+- re-plan / retry
+- stop condition / iteration limit
 - execution trace
+- knowledge/context tool integration
 - read-only source analysis agent
 
 ## Out of Scope
 
-P4 第一阶段默认不追求完整 coding loop：
-
+- long-running GitCode polling
+- GitCode review publishing
 - arbitrary source editing
 - ArkUI build pipeline
 - UT repair loop
@@ -397,58 +396,93 @@ P4 第一阶段默认不追求完整 coding loop：
 
 Agent 可以：
 
-1. 接收开发/分析 Task；
+1. 接收开发/分析 Task 或结构化 Change context；
 2. 生成和维护 Current Plan；
-3. 根据状态选择 repository tools；
-4. 使用 P1/P2/P3，而不是绕过基础设施自行做无边界搜索；
-5. 处理 Observation；
-6. Re-plan；
-7. 触发明确 Stop Condition；
-8. 防止无限循环；
-9. 处理 invalid tool call；
-10. 记录完整 Execution Trace；
-11. 在一组 read-only Source Analysis benchmark 上稳定完成任务。
+3. 根据状态选择受控 Tool/Skill；
+4. 使用 P1/P2/P3，而不是绕过基础设施做无边界搜索；
+5. 处理 Observation 并 Re-plan；
+6. 触发明确 Stop Condition 并防止无限循环；
+7. 处理 invalid tool/skill call；
+8. 记录 Task/Change、Plan、Skill、Tool、Observation、Context、Snapshot identity、Iteration、Token Cost、Latency；
+9. 在 read-only Source Analysis benchmark 上稳定完成任务；
+10. runtime 不依赖 GitCode 私有 API，也不依赖 UT-only state machine。
 
-Execution Trace 至少记录：
-
-- Task
-- Plan
-- Tool
-- Tool Arguments
-- Observation
-- Retrieved Context
-- Iteration
-- Token Cost
-- Latency
-
-# 8. P5 — UT Agent & Repair
+# 8. P5 — Engineering Capabilities
 
 ## Goal
 
-完成真实 ArkUI UT 开发闭环。
+在 P1-P4 的共享 Repository-aware 基础设施上实现真实工程能力。
 
-P5 回答：
+第一批能力：
 
-> Agent 能否找到正确测试上下文、生成符合项目风格的 UT、通过编译和测试，并自动修复失败？
+```text
+P5 Engineering Capabilities
+├─ Code Review
+└─ UT Development & Repair
+```
 
-## In Scope
+## Code Review — In Scope
+
+- CodeHostProvider abstraction / GitCodeProvider
+- PR/change ingestion
+- configurable polling watcher（可表达每 10 分钟等周期）
+- PR author username filter
+- base/head revision tracking 与 deduplication
+- manual re-review entry
+- knowledge freshness gate
+- P3 Review Context
+- Code Review Skill
+- Stability / Memory-Lifetime / Functional / Test Impact review
+- structured ReviewFinding
+- review summary / inline comment publishing
+- duplicate finding/comment suppression
+- review execution trace
+
+## Code Review — Definition of Done
+
+对配置命中的受控/真实 GitCode PR review task，系统能够：
+
+```text
+Poll / Manual Trigger
+→ Discover PR
+→ Author Filter
+→ Head Revision Dedup
+→ Read Change
+→ Ensure Knowledge Freshness
+→ Build Review Context
+→ Review
+→ Produce 0..N Findings
+→ Publish / Record Result
+```
+
+并满足：
+
+1. polling interval 可配置；
+2. 可按 PR author username 筛选；
+3. 同一 PR 同一 head revision 不因轮询重复检视/评论，新 revision 可触发新 review；
+4. GitCode 私有 schema 被 provider 隔离；
+5. Review 使用 P1/P2/P3 supporting context，而不是 diff-only Prompt；
+6. finding 有 source location、category、severity/confidence、evidence/provenance；
+7. 至少支持 Stability、Memory/Lifetime、Functional、Test Impact；
+8. 支持 zero findings；
+9. stale/failed knowledge 不伪装成 fresh；
+10. publish failure 可追踪并避免无限重复 spam；
+11. evaluation 包含 No-Issue case。
+
+## UT Development & Repair — In Scope
 
 - Test Mapping
-- Fixture Retrieval
-- Similar Test Retrieval
-- Mock Retrieval
+- Fixture / Similar Test / Mock Retrieval
 - Coverage Gap / Test Intent
 - UT Generation
 - patch application
-- minimal build target
-- minimal test target
-- error parsing
-- failure classification
+- minimal build / test target
+- error parsing / failure classification
 - root cause retrieval
 - repair loop
-- end-to-end UT Agent
+- end-to-end UT workflow
 
-## Definition of Done
+## UT Development & Repair — Definition of Done
 
 对 benchmark UT task，Agent 可以完成：
 
@@ -467,16 +501,13 @@ Task
 → Re-run
 ```
 
-并记录：
+并记录 Compile Pass Rate、UT Pass Rate、Task Success Rate、Repair Success Rate、Average Iterations、Tool Calls、Token Cost、Latency。
 
-- Compile Pass Rate
-- UT Pass Rate
-- Task Success Rate
-- Repair Success Rate
-- Average Iterations
-- Tool Calls
-- Token Cost
-- Latency
+## Shared Rules
+
+- Code Review 与 UT 是 sibling capabilities，共享 P1/P2/P3/P4。
+- Code Review 可以产生 Test Gap finding，后续交给 UT capability。
+- P5 具体 milestone 接近开发时再拆入 `docs/exec-plans/active/`，当前 P2 不提前实现。
 
 # 9. P6 — Evaluation & Hardening
 
@@ -503,6 +534,12 @@ P6 不负责首次建立评价体系，而是整合并完善 P1-P5 已持续建�
 - Property Trace
 - Layout Trace
 - Source Analysis
+- Task / Change Context
+- Code Review Stability
+- Code Review Memory/Lifetime
+- Code Review Functional Correctness
+- Code Review Test Impact
+- Code Review No-Issue case
 - UT Generation
 - UT Repair
 
@@ -516,8 +553,9 @@ P6 不负责首次建立评价体系，而是整合并完善 P1-P5 已持续建�
 - Target Symbol Recall
 - Call Chain Accuracy
 
-### Context
+### Knowledge / Context
 
+- Snapshot Freshness Correctness
 - Relevant Context Ratio
 - Missing Dependency Rate
 - Context Token Cost
@@ -526,8 +564,20 @@ P6 不负责首次建立评价体系，而是整合并完善 P1-P5 已持续建�
 
 - Tool Success Rate
 - Invalid Tool Call Rate
+- Invalid Skill Call Rate
 - Average Tool Calls
 - Average Iterations
+
+### Code Review
+
+- Finding Precision
+- Finding Recall
+- False Positive Rate
+- Category Accuracy
+- Severity Accuracy
+- Evidence / Provenance Validity
+- Duplicate Comment Rate
+- Review Latency
 
 ### Coding
 
@@ -544,7 +594,7 @@ P6 不负责首次建立评价体系，而是整合并完善 P1-P5 已持续建�
 
 ## Ablation
 
-正式比较：
+通用能力比较：
 
 ```text
 LLM Only
@@ -558,16 +608,31 @@ vs
 Code Graph + Agent
 ```
 
+Code Review 额外比较：
+
+```text
+Diff-only LLM
+vs
+Diff + Text Retrieval
+vs
+Diff + Symbol Retrieval
+vs
+Diff + Code Graph
+vs
+Full Repository-aware Reviewer
+```
+
 ## Definition of Done
 
 1. benchmark dataset 固化；
 2. evaluation command 可重复运行；
-3. 结果可追踪到具体 task / component；
+3. 结果可追踪到具体 task/change/component；
 4. 失败案例可分类；
 5. 完成主要 ablation comparison；
 6. 有成本、延迟和成功率数据；
-7. 对系统高频失败点完成 hardening；
-8. 可以明确说明 Repository Intelligence、Code Graph、Context Builder 和 Agent Runtime 各自带来的增益或限制。
+7. Code Review benchmark 含 No-Issue cases 并统计 false positive；
+8. 对高频失败点完成 hardening；
+9. 可以明确说明 Repository Intelligence、Code Graph、Knowledge Lifecycle、Context Builder 和 Agent Runtime 各自的增益或限制。
 
 # 10. Phase Dependency
 
@@ -578,11 +643,13 @@ P1 Repository Intelligence
         ↓
 P2 ArkUI Code Graph
         ↓
-P3 Task Retrieval & Context Builder
+P3 Task / Change Retrieval & Context Builder
         ↓
 P4 Agent Runtime
         ↓
-P5 UT Agent & Repair
+P5 Engineering Capabilities
+   ├─ Code Review
+   └─ UT Development & Repair
         ↓
 P6 Evaluation & Hardening
 ```
@@ -592,9 +659,11 @@ P6 Evaluation & Hardening
 Evaluation fixture、benchmark 标注、文档与测试基础可以提前并行建设，但核心能力依赖必须保持：
 
 - P2 不绕过 P1 自己重新解析 repository facts；
-- P3 不绕过 P2/P1 直接依赖 LLM 猜上下文；
+- P3 不绕过 P1/P2 直接依赖 LLM 猜上下文；
+- P3 Knowledge Manager 不复制 P1/P2 semantic/index/graph implementation；
 - P4 不绕过 P3 长期依赖无约束 Prompt stuffing；
-- P5 不把 build/test/repair 逻辑塞回 P4 基础 runtime；
+- P5 Code Review/UT 不各自复制 P1-P4 基础设施；
+- GitCode 私有协议不泄漏到 P3 retrieval 或通用 review reasoning；
 - P6 不成为唯一存在 evaluation 的阶段。
 
 # 11. Milestone Execution Rule
@@ -629,3 +698,5 @@ P1-C
 ```
 
 Codex 每次只执行当前明确任务，不自动进入下一个 milestone。
+
+P3-P6 的细粒度 milestone 在接近对应 Phase 开发时再进入 `docs/exec-plans/active/`；本次长期路线修订不创建新的 active plan，也不改变当前 P2 milestone 状态。

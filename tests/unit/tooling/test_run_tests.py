@@ -4,9 +4,15 @@ import io
 import os
 import unittest
 import warnings
+from pathlib import Path
 from unittest.mock import patch
 
-from scripts.run_tests import run_suite, select_tests, strict_result_succeeded
+from scripts.run_tests import (
+    load_requested_tests,
+    run_suite,
+    select_tests,
+    strict_result_succeeded,
+)
 
 
 def passing_test() -> unittest.TestCase:
@@ -44,6 +50,18 @@ def external_test() -> unittest.TestCase:
 
 
 class StrictTestRunnerTests(unittest.TestCase):
+    def test_requested_test_names_replace_full_discovery(self) -> None:
+        suite = load_requested_tests(
+            Path("tests"),
+            Path("."),
+            (
+                "tests.unit.tooling.test_run_tests."
+                "StrictTestRunnerTests.test_passing_nonempty_suite_succeeds",
+            ),
+        )
+
+        self.assertEqual(suite.countTestCases(), 1)
+
     def test_passing_nonempty_suite_succeeds(self) -> None:
         result, resource_warnings = run_suite(
             unittest.TestSuite((passing_test(),)),

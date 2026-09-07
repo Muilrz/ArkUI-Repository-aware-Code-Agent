@@ -19,6 +19,7 @@ class CreationCase:
     pattern: str
     expected_status: str
     source_evidence: tuple[tuple[str, int, str], ...]
+    expected_gaps: tuple[str, ...] = ()
     entry_namespace: str = "OHOS::Ace::NG"
 
 
@@ -47,7 +48,7 @@ CASES = (
          "[]() { return AceType::MakeRefPtr<InnerMenuPattern>(-1, MENU_ETS_TAG, MenuType::MULTI_MENU); };"),
         (f"{ROOT}/menu/menu_model_ng.cpp", 30,
          "return FrameNode::GetOrCreateFrameNode(MENU_ETS_TAG, nodeId, patternCreator);"),
-    )),
+    ), expected_gaps=("missing_pattern_stage", "unsupported_pattern_callback")),
 )
 # Menu intentionally stays incomplete: P2-C does not classify InnerMenuPattern,
 # and P1 does not expose the callback-to-pattern argument binding. Do not

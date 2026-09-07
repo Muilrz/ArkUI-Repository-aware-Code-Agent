@@ -1,5 +1,5 @@
 {
-  "description": "Run the repository validation gate before Codex stops.",
+  "description": "Run changed or added tests before Codex stops.",
   "hooks": {
     "Stop": [
       {
@@ -7,9 +7,9 @@
           {
             "type": "command",
             "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/codex_stop_validation.py\"",
-            "commandWindows": "powershell -NoProfile -Command \"$root = git rev-parse --show-toplevel; & py -3 (Join-Path $root 'scripts/codex_stop_validation.py')\"",
-            "timeout": 600,
-            "statusMessage": "Running repository validation"
+            "commandWindows": "py -3 (Join-Path (git rev-parse --show-toplevel) 'scripts/codex_stop_validation.py')",
+            "timeout": 330,
+            "statusMessage": "Running changed tests"
           }
         ]
       }

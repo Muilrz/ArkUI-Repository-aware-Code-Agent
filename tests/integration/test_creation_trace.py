@@ -109,6 +109,7 @@ def run_creation_cases(test, workspace, cases, *, real):
                 test.assertTrue(trace.exhaustive)
                 test.assertEqual(len(trace.paths), 1)
                 path = trace.paths[0]
+                test.assertEqual(path.issues, case.expected_gaps)
                 expected_names = [case.entry_namespace + "::" + case.entry_name,
                                   f"OHOS::Ace::NG::{case.component.title()}ModelNG::CreateFrameNode",
                                   f"OHOS::Ace::NG::FrameNode::{case.frame_method}"]

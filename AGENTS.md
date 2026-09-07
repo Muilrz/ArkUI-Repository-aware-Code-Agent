@@ -1,6 +1,6 @@
-# Muil_ArkUI-UT-Agent
+# ArkUI Repository-aware Code Agent
 
-本项目旨在构建面向 OpenHarmony ArkUI Ace Engine 的 Repository-aware Code Agent。
+本项目旨在构建面向 OpenHarmony ArkUI Ace Engine 的 multi-capability Repository-aware Engineering Agent。Repository Intelligence、ArkUI Code Graph、Task / Change Context 与 Agent Runtime 是共享基础设施；Code Review 和 UT Development / Repair 是第一批上层 Engineering Capabilities。
 
 ## Source of Truth
 
@@ -44,12 +44,13 @@
 
 - P0 — Engineering Foundation
 - P1 — Repository Intelligence
+- P2 — ArkUI Code Graph（已通过最终验收，计划归档于 `docs/exec-plans/completed/`）
 
 当前优先推进：
 
-- P2 — ArkUI Code Graph
+- P3 — Task / Change Retrieval & Context Builder 的规划与逐 milestone 开发，范围见 `docs/exec-plans/active/`。
 
-除非当前任务明确要求，不要提前实现 P3 及后续 Phase。
+当前 session 只整理 P2 收尾文档和 P3 execution plan，不实现 P3-A。后续仅在任务明确要求时实现对应 P3 milestone，不提前实现 P4 及后续 Phase。Code Review 新需求不得扩展已冻结的 P2 scope 或 baseline。
 
 开发任务应尽量以 milestone 为最小可验收单元，例如：
 
@@ -63,12 +64,15 @@
 
 - Repository Intelligence 不依赖 LLM。
 - Parser / semantic backend 必须与 indexing / retrieval API 解耦。
-- Repository-derived persistent knowledge 应沉淀在 index / graph / metadata 中，而不是长期 LLM memory。
-- Task Retrieval 与 Task Context Builder 可以属于同一工程 Phase，但代码职责应保持分离。
-- P4 Agent Runtime 与 P5 UT Agent & Repair 必须保持边界：先验证 Agent 能正确使用工具和上下文，再引入代码修改、Build、Test 和 Repair 闭环。
+- Repository-derived persistent knowledge 应沉淀在 index / graph / metadata / knowledge snapshot 中，而不是长期 LLM memory。
+- P1/P2/P3/P4 是多个 Engineering Capabilities 共享的基础设施；不得为 Code Review、UT 或后续 capability 分别复制 repository index、ArkUI graph 或 context pipeline。
+- P3 负责 Task / Change Retrieval、Knowledge Snapshot/Freshness、Task/Change-driven Graph Expansion、Context Ranking 与 Context Pack；Task/Change candidate retrieval 与最终 context selection 应保持职责分离。
+- P4 Agent Runtime 负责通用 planning、Tool/Skill invocation、state、observation、retry、stop condition 与 execution trace；P5 才实现 Code Review、UT Development/Repair 等具体 Engineering workflow。
+- Skill 负责描述如何组合 Tool 完成工程任务；周期 polling、平台事件、Repository Knowledge 长期存储不得塞进 Skill 或 LLM memory。
+- GitCode 等外部 Code Host 必须隐藏在清晰的 provider/adapter 边界后；上层 Code Review reasoning 不依赖平台私有 API schema。
+- Repository Knowledge refresh 是共享平台能力，应支持显式 freshness 状态和可调用的 refresh entry point；Code Review/UT 不维护私有全仓知识副本。
 - Evaluation 从项目早期同步建设；P6 负责形成正式 benchmark、ablation 与 hardening，而不是等到 P6 才开始评估。
-- P2 负责 graph model、ArkUI framework-aware relation 和通用局部 graph traversal；
-  Task-driven Graph Expansion、Task Subgraph Extraction 与 Context Pack 属于 P3。
+- P2 负责 graph model、ArkUI framework-aware relation 和通用局部 graph traversal；Task/Change-driven Graph Expansion、Task Subgraph Extraction 与 Context Pack 属于 P3。
 
 ## Target Repository
 
@@ -95,14 +99,11 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 
 完成 coding task 前必须：
 
-1. 运行与改动相关的 unit tests；
-2. 必要时运行 integration tests；
-3. 报告实际执行的命令；
-4. 报告测试结果；
-5. 明确说明无法执行的测试及原因；
-6. 总结修改文件；
-7. 总结重要架构决定；
-8. 提供可 review 的 diff。
+1. Codex 开发过程中不主动执行测试命令；行为变更仍须新增或更新对应测试；
+2. trusted Stop Hook 在停止前只运行工作树中新增或修改的 `test_*.py`；Codex 根据 Hook 结果继续修复或汇报；
+3. strict full、真实 ArkUI baseline 和其他昂贵验证由用户显式触发，不由 Codex 或 Stop Hook 自动执行；
+4. Hook 不可用或未 trusted 时必须明确报告本次未验证，不得以手动 full 自动补跑；
+5. 报告 Hook 实际结果、未验证项、修改文件、重要决定和可 review diff。
 
 若存在必需测试失败，不得宣称任务完成。
 
@@ -137,6 +138,7 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 - `compile_commands.json` 等大型外部构建派生产物。
 
 不要重写既有 Git history。
+
 ### Runtime Artifact Discipline
 
 - 不要为每个 milestone 自动生成或长期保存独立 `.patch`、diff snapshot、`before` snapshot、`code-freeze` 文件或逐命令测试日志。
@@ -144,7 +146,7 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 - 开发过程中的 probe、临时诊断结果和中间测试输出默认只用于当前执行，不持久化到 `var/`。
 - `var/` 只保留确有工程用途、可由明确项目流程消费的运行产物，例如：
   - evaluation / benchmark 输出；
-  - Symbol Index、Graph snapshot 等明确设计为可重建的 runtime data；
+  - Symbol Index、Graph snapshot、Knowledge Snapshot 等明确设计为可重建的 runtime data；
   - Stop Hook 使用的最新 validation 结果；
   - execution plan 或测试明确要求用于真实仓库验收的机器可读 smoke / validation report。
 - 如果最终报告中的文字即可完整表达验证结果，则不要额外生成同内容的 JSON / log 文件。
