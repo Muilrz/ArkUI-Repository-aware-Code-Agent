@@ -24,6 +24,20 @@
 
 不要自行用新的总体架构替换这些文档中的既定设计。若发现文档之间存在实际冲突，应在实现前明确指出。
 
+### Documentation Authority
+
+文档按以下职责维护，避免在多处重复定义同一行为：
+
+- `docs/architecture/` 说明长期结构、模块职责、依赖方向和架构边界；不记录源码行号、逐次测试结果或实现过程。
+- `docs/specs/` 定义当前已实现能力的规范行为、接口、不变量和失败语义。execution plan 只引用这些规范，不复制完整 contract。
+- `docs/exec-plans/phase-map.md` 定义 Phase 边界与 Definition of Done。
+- `docs/exec-plans/active/` 定义当前变更的目标、范围、交付物、Acceptance Criteria 和状态；完成记录保持简洁。
+- `docs/exec-plans/completed/` 保存已结束的执行计划。
+- `tests/fixtures/` 中的冻结 expected case 是具体源码验证预期的可执行来源；`docs/evaluation/` 保存跨 milestone 的 baseline 和指标说明。
+- `docs/decisions/` 记录需要长期保留背景、选择与后果的重要架构决定。
+
+当 active execution plan 有意修改既有行为时，它描述本次拟议变更；完成实现时必须同步更新对应 spec。若 spec 与 roadmap 或 phase boundary 冲突，以上层文档为准。代码与 spec 不一致应视为实现或文档缺陷，不通过复制一份新规则来规避。
+
 ## Current Development Scope
 
 已完成：

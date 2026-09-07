@@ -70,6 +70,8 @@ Repository Intelligence 作为整个 Agent 的底层基础设施，不直接依�
 
 ## 3. ArkUI Code Graph
 
+P2 的当前层次、边界与规范索引见 [`code-graph-architecture.md`](code-graph-architecture.md)。本文只保留长期架构方向。
+
 在 Symbol Index 之上构建面向 ArkUI 框架的代码关系图。
 
 节点包括：

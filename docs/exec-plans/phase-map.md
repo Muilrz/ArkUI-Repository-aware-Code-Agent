@@ -263,7 +263,7 @@ P2 回答：
 - property update trace
 - measure/layout trace
 - overlay trace
-- lifecycle trace
+- optional lifecycle trace（需独立 milestone；不属于当前 P2 Definition of Done）
 
 ## Out of Scope
 
