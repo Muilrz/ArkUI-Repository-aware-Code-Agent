@@ -1,5 +1,4 @@
 {
-  "description": "Run changed or added tests before Codex stops.",
   "hooks": {
     "Stop": [
       {
