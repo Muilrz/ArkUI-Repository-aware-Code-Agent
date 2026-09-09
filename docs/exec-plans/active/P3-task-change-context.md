@@ -1,7 +1,7 @@
 # P3 — Task / Change Retrieval & Context Builder
 
 - **Phase Status:** In Progress
-- **Planning:** 当前仅执行 P3-B；不启动 P3-C 或 retrieval。
+- **Planning:** P3-C2 已完成；P3-C1 保持 Completed，不启动 P3-D 或后续 milestone。
 - **Phase Goal:** 复用 P1/P2，将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
 - **Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)，重点为 §4–6。
 - **Phase Boundary / Definition of Done:** [Phase map §6](../phase-map.md#6-p3--task--change-retrieval--context-builder)。
@@ -116,7 +116,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 ## P3-B — Knowledge Snapshot Read Contract and Freshness
 
-- **Status:** In Progress
+- **Status:** Completed
 - **Goal:** 在第一条多通道查询前确保所有 evidence 有一致且可核验的知识来源。
 - **Dependencies:** A；为 C1–H 提供绑定接口，F 复用同一 manifest。
 - **Scope:** typed manifest、repository/revision/build scope 身份、freshness evaluation、读取和验证显式预构建 artifacts、query session binding、source revision/hash 检查；last usable 与 latest attempt 分离。
@@ -125,11 +125,11 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** 五种 freshness 语义可区分；old index/new graph 或未知 revision 不得 fresh；dirty/source drift 明确拒绝或降级；覆盖范围不足区别于 stale；合法预构建 snapshot 可绑定并供查询复用；缺失/损坏 manifest 不能静默产生空 fresh snapshot；状态和诊断可序列化。
 - **Tests / real validation:** 临时 Git repository 的 revision transition、dirty source、混合 artifact、工具/规则配置变化、scope mismatch、读取期间变化；人工核对 P2 fixture preparation scope 可被 manifest 表达。真实大仓库 refresh 尚非本 milestone 验收条件。
 - **Known Limitations:** 不负责生产已有 index 的 revision 证明；没有可信 manifest 的遗留 artifact 为 unknown，需要 F rebuild 或显式验证流程。
-- **Implementation / acceptance:** `arkui_agent.knowledge` 实现 manifest、freshness、prebuilt read adapter 与固定 generation session；contract 见 [knowledge snapshot v1](../../specs/task-change-context/knowledge-snapshot-v1.md)。已新增纯模型和 temporary Git/P1/P2 tests；已核对 P2 preparation 可表达为 selected-files scope。等待本次 trusted Stop Hook targeted 结果，保持 In Progress。
+- **Implementation / acceptance:** `arkui_agent.knowledge` 实现 manifest、freshness、prebuilt read adapter 与固定 generation session；contract 见 [knowledge snapshot v1](../../specs/task-change-context/knowledge-snapshot-v1.md)。Stop Hook 已验证 26 个模型/temporary Git/P1/P2 tests 通过；P2 preparation 可表达为 selected-files scope，B 收口。
 
 ## P3-C1 — Multi-channel Candidate Retrieval
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** 将 Task hints 或显式 Change seeds 转换为统一、可追溯的候选集合。
 - **Dependencies:** A、B；供 C2 映射后重新召回及 D expansion 使用。
 - **Scope:** 上述 P1/P2 typed adapters、有限 query planning、Text/Symbol/Reference/Call/Test/直接 Graph 候选、通道预算、identity-based dedup、provenance 合并、channel availability/completeness。候选模型在 E 汇总时收敛，不冻结最终 Pack。
@@ -138,10 +138,11 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** Task 和结构化 Change seed 可走相同通道；同名不同 identity 保留；查询顺序不影响 canonical output；empty/unsupported/backend failure/truncated 分开；每个 candidate 有 snapshot/source/query provenance；有限 candidate limit 不被表述为最终上下文完整性。
 - **Tests / real validation:** 临时 C++ repository 使用真实 P1 facade/index/rg 验证跨通道重复、空 test mapping、工具缺失与错误传播；用户显式触发 Button/Text/Menu 小范围 candidate smoke，复用 P1 revision 检查和标注 anchors，不读取 expected 生产候选。
 - **Known Limitations:** C1 只消费显式 changed symbol seeds；普通 diff 的 symbol seeds 在 C2 接通。没有可靠 test mapping 时可返回文本测试候选，但必须区分证据等级。
+- **Implementation / acceptance:** 用户接受实现设计并于 2026-09-09 人工冻结三组 [expected](../../evaluation/p3-c1-annotation-draft.md)。trusted Stop Hook 22/22 通过；显式 real smoke 在查询前固定的 30-file snapshot 上 required 12/12、provenance/顺序稳定性通过、0 新造 relation。组件 text query 的截断和 P1 caller-range 精度限制保留；详见 [C1 验收记录](../../evaluation/p3-c1-candidate-smoke.md)。未运行 strict full，不进入 C2。
 
 ## P3-C2 — Change Range to Symbol Mapping
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** 在可证明范围内把 Change 文件/hunk/range 转为语义 seeds，并保持双侧 provenance。
 - **Dependencies:** A、B、C1；输出供 D，映射后复用 C1 检索。
 - **Scope:** 按 revision side 查询 P1 file/symbol ranges；enclosing/overlap 关系分类；新增、删除、重命名、多 symbol hunk、无法映射和 ambiguity；head 支持上下文与 base-only evidence 分离。
@@ -150,6 +151,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** 可证明的 changed symbols 保留 identity 和范围依据；多个相交 symbol 不静默选一个；P1 范围不足保持 unresolved；缺 base snapshot 不用 head 行号替代 deletion；有两个兼容 side snapshots 时各自映射并不跨侧合并；未解析 diff 仍进入 file/range candidates。
 - **Tests / real validation:** 临时双 revision Git/C++ fixture 验证行移动、rename、删除、宏、hunk 跨函数、declaration/definition；用户显式触发真实 ArkUI Change smoke，使用人工确认的 base/head 和 hunks。若尚无可用真实 revision pair，保持该真实验收未完成，不能用伪造相同 base/head 顶替。
 - **Known Limitations:** changed symbol 不等于行为影响范围；不要求所有 hunk 都能映射。
+- **Implementation / acceptance:** C2 mapper、双侧绑定及最小 P1 canonicalization 已通过 trusted Hook（72/72，188.289 秒）与原冻结真实 smoke。4 required hits / 3 unresolved / 1 not_applicable 全通过，双侧 fresh、identity/extent/provenance 独立审计与重复 canonical output 稳定性通过。见 [最终验收](../../evaluation/p3-c2-change-smoke.md)；frozen expected 未变，不启动 D。
 
 ## P3-D — Task / Change-driven Graph Expansion
 
@@ -282,6 +284,6 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 | 10 context metrics | C1–H 持续标注/验证；I 汇总 |
 | 11 bounded graph/source context | C1、D、E、H；I |
 
-## Current session: P3-B only
+## Current session: P3-C2 only
 
-当前仅实现 B 的 manifest、validation、freshness 与只读 binding；P3-A 已通过 targeted tests 且用户接受输入设计。Phase 保持 In Progress，不实现 rebuild、P3-C retrieval 或后续能力。B 的必需 Hook 验证未通过或未执行时保持 In Progress；通过后仅收口 B，不自动进入 C。
+C2 changed range → 双侧 symbol seeds 及 C1 integration 已完成，保留已完成 C1 与既有修改。trusted Hook 与用户显式授权的原冻结双 revision smoke 均通过；Phase 保持 In Progress，不进入 P3-D。

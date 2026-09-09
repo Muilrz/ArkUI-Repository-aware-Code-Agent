@@ -12,6 +12,7 @@ from arkui_agent.repository import (
     ClangdProtocolError,
     ClangdUnavailableError,
     RepositoryWorkspace,
+    RepositoryFile,
     SemanticProviderClosedError,
     SemanticProviderError,
     SymbolIdentity,
@@ -24,6 +25,31 @@ from arkui_agent.repository.clangd import (
     _symbol_info_location_to_range,
 )
 from tests.fixtures.synthetic_cpp_repository import synthetic_cpp_repository
+
+
+class FixedScopeObservationTests(unittest.TestCase):
+    def test_all_documents_ready_before_any_location_collection(self):
+        provider = object.__new__(ClangdSemanticProvider)
+        events = []
+        paths = (RepositoryFile.from_path("z.cpp"), RepositoryFile.from_path("a.h"))
+
+        def open_document(file):
+            events.append(("open", file.path.as_posix()))
+            return file.path.as_posix()
+
+        def request(method, params):
+            self.assertEqual(method, "textDocument/documentSymbol")
+            events.append(("ready", params["textDocument"]["uri"]))
+            return []
+
+        def collect(items, uri, *args):
+            events.append(("collect", uri))
+
+        with patch.object(provider, "_require_open"), patch.object(provider, "_open_document", side_effect=open_document), \
+             patch.object(provider, "_request", side_effect=request), \
+             patch.object(provider, "_collect_document_symbols", side_effect=collect):
+            self.assertEqual(provider.symbol_observations_in_files(paths), ())
+        self.assertEqual(events, [(phase, path) for phase in ("open", "ready", "collect") for path in ("a.h", "z.cpp")])
 
 
 def _json_rpc_frame(message: dict[str, object]) -> bytes:

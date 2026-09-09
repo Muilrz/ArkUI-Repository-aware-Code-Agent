@@ -31,7 +31,12 @@ class SemanticProvider(Protocol):
     """
 
     def symbols_in_file(self, file: RepositoryFile) -> tuple[Symbol, ...]:
-        """Return symbols declared or defined in ``file``."""
+        """Return symbols declared or defined in ``file``.
+
+        Document hierarchy may differ at out-of-class definition sites. Providers
+        exposing SymbolObservation support evidence-based cross-file canonical
+        merging; consumers must not choose conflicting facts by scan order.
+        """
 
         ...
 
@@ -75,4 +80,3 @@ class SemanticProvider(Protocol):
         traceback: TracebackType | None,
     ) -> None:
         ...
-

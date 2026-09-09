@@ -12,6 +12,7 @@ from arkui_agent.repository import (
     SemanticProviderClosedError,
     Symbol,
     SymbolKind,
+    canonicalize_symbols,
 )
 from tests.fixtures.synthetic_cpp_repository import synthetic_cpp_repository
 
@@ -89,6 +90,26 @@ class ClangdSemanticProviderIntegrationTests(unittest.TestCase):
         self.assertEqual(widget.namespace_identity, namespace.identity)
         self.assertEqual(value.parent_identity, widget.identity)
         self.assertIn("Widget", value.qualified_name)
+
+    def test_declaration_site_canonical_member_is_independent_of_file_scan_order(self) -> None:
+        outputs = []
+        paths = ("include/fixture/widget.h", "src/widget.cpp")
+        for order in (paths, tuple(reversed(paths))):
+            # Fresh provider per scan order: no cached first-observation authority.
+            with ClangdSemanticProvider(self.workspace, executable=self.executable,
+                                       fallback_flags=("-std=c++17", f"-I{self.repository.root / 'include'}")) as provider:
+                facts = provider.symbol_observations_in_files(tuple(RepositoryFile.from_path(path) for path in order))
+            methods = tuple(f for f in facts if f.symbol.qualified_name == "fixture::Widget::value")
+            self.assertEqual(len(methods), 2)
+            self.assertEqual({f.site.file.path.as_posix() for f in methods}, set(paths))
+            merged, = canonicalize_symbols(methods)
+            self.assertEqual((merged,), canonicalize_symbols(tuple(reversed(methods))))
+            declared = next(f for f in methods if f.site.file.path.as_posix() == paths[0])
+            self.assertEqual(declared.parent_kind, SymbolKind.CLASS)
+            self.assertEqual(merged.parent_identity, declared.symbol.parent_identity)
+            self.assertEqual(merged.display_name, "value")
+            outputs.append(merged)
+        self.assertEqual(outputs[0], outputs[1])
 
     def test_declaration_definition_and_references(self) -> None:
         self._source_symbols()

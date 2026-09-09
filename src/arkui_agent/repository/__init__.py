@@ -1,5 +1,7 @@
 """Repository workspace package."""
 
+from arkui_agent.repository.symbol_merge import SymbolMergeConflict, SymbolObservation, canonicalize_symbols
+
 from arkui_agent.repository.clangd import (
     ClangdProtocolError,
     ClangdSemanticProvider,
@@ -61,6 +63,9 @@ from arkui_agent.repository.workspace import (
 )
 
 __all__ = [
+    "SymbolMergeConflict",
+    "SymbolObservation",
+    "canonicalize_symbols",
     "ARKUI_REPO_ROOT",
     "ARKUI_FIXTURE_TEST_MACROS",
     "ClangdProtocolError",

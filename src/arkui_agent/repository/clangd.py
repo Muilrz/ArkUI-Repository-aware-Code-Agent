@@ -31,6 +31,7 @@ from arkui_agent.repository.semantic import (
     SemanticProviderError,
 )
 from arkui_agent.repository.workspace import RepositoryWorkspace
+from arkui_agent.repository.symbol_merge import SymbolObservation
 
 
 class ClangdUnavailableError(SemanticProviderError):
@@ -314,19 +315,39 @@ class ClangdSemanticProvider:
         return self._closed
 
     def symbols_in_file(self, file: RepositoryFile) -> tuple[Symbol, ...]:
-        self._require_open()
-        uri = self._open_document(file)
-        result = self._request(
-            "textDocument/documentSymbol", {"textDocument": {"uri": uri}}
-        )
-        if result is None:
-            return ()
-        if not isinstance(result, list):
-            raise ClangdProtocolError("clangd returned invalid document symbols.")
+        return tuple(f.symbol for f in self.symbol_observations_in_file(file))
 
-        symbols: list[Symbol] = []
-        self._collect_document_symbols(result, uri, symbols, None, None, "")
-        return tuple(sorted(symbols, key=_symbol_sort_key))
+    def symbol_observations_in_file(self, file: RepositoryFile) -> tuple[SymbolObservation, ...]:
+        """Return local hierarchy facts with their actual semantic selection sites.
+
+        Multi-file consumers can canonicalize the complete collection through
+        canonicalize_symbols; no first-observed handle is used to select facts.
+        """
+        return self.symbol_observations_in_files((file,))
+
+    def symbol_observations_in_files(self, files: tuple[RepositoryFile, ...]) -> tuple[SymbolObservation, ...]:
+        """Collect a fixed scope after every requested document has been parsed.
+
+        Do not mix early header-only location queries with later observations
+        made after opening the definition translation unit. This is a bounded
+        preparation barrier, not polling, retries or selection of winning facts.
+        """
+        self._require_open()
+        uris = tuple(self._open_document(file) for file in sorted(set(files), key=lambda f: f.path.as_posix()))
+        documents = []
+        for uri in uris:
+            result = self._request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
+            if result is None:
+                continue
+            if not isinstance(result, list):
+                raise ClangdProtocolError("clangd returned invalid document symbols.")
+            documents.append((uri, result))
+        # documentSymbol responses establish AST readiness for the entire scope
+        # before any declaration/definition location query is collected.
+        symbols: list[SymbolObservation] = []
+        for uri, result in documents:
+            self._collect_document_symbols(result, uri, symbols, None, None, "")
+        return tuple(sorted(symbols, key=lambda f: _symbol_sort_key(f.symbol)))
 
     def declaration(self, identity: SymbolIdentity) -> SourceRange | None:
         handle = self._find_handle(identity)
@@ -450,10 +471,11 @@ class ClangdSemanticProvider:
         self,
         items: list[object],
         uri: str,
-        output: list[Symbol],
+        output: list[SymbolObservation],
         parent_identity: SymbolIdentity | None,
         namespace_identity: SymbolIdentity | None,
         container_name: str,
+        parent_kind: SymbolKind | None = None,
     ) -> None:
         for item in items:
             if not isinstance(item, dict):
@@ -500,7 +522,10 @@ class ClangdSemanticProvider:
                     identity if kind is SymbolKind.NAMESPACE else namespace_identity
                 ),
             )
-            output.append(symbol)
+            site = _lsp_range_to_source_range(self._workspace, uri, selection, self._position_encoding)
+            if site is None:
+                raise ClangdProtocolError("Document symbol selection is outside the repository.")
+            output.append(SymbolObservation(symbol, site, parent_kind))
             self._handles.setdefault(identity, _SymbolHandle(symbol, uri, position))
 
             children = item.get("children", [])
@@ -512,6 +537,7 @@ class ClangdSemanticProvider:
                     identity,
                     identity if kind is SymbolKind.NAMESPACE else namespace_identity,
                     qualified_name,
+                    kind,
                 )
 
     def _symbol_info(self, uri: str, position: dict[str, int]) -> dict[str, object] | None:
