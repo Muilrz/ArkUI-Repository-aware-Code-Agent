@@ -1,7 +1,7 @@
 # P3 — Task / Change Retrieval & Context Builder
 
 - **Phase Status:** In Progress
-- **Planning:** P3-C2 已完成；P3-C1 保持 Completed，不启动 P3-D 或后续 milestone。
+- **Planning:** P3-D 已完成；P3 Phase 保持 In Progress，不启动 P3-E 或后续 milestone。
 - **Phase Goal:** 复用 P1/P2，将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
 - **Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)，重点为 §4–6。
 - **Phase Boundary / Definition of Done:** [Phase map §6](../phase-map.md#6-p3--task--change-retrieval--context-builder)。
@@ -155,7 +155,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 ## P3-D — Task / Change-driven Graph Expansion
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** 根据任务/变更有界选择和组合已有 graph 与 trace 观察，扩大相关证据召回。
 - **Dependencies:** C1、C2；输出供 E。
 - **Scope:** 显式 policy 配置/version；Task/Change seeds、上下游方向、relation family、适用 trace query；per-seed 与全局 node/edge/query/path 限额；去重、stop reason、ambiguity 与已知缺口透传。
@@ -164,6 +164,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** 相同 snapshot/input/policy 可重复；所有扩展均可追溯 seed 与真实 relation；跨组件扩展必须有事实依据；操作 binding 不转为 CALL；预算限制显式说明；Menu layout 多 algorithm、Overlay 多 Close path 保留；缺关系时可召回独立证据但不能宣称 P2 trace 已修复。
 - **Tests / real validation:** cycle、多 seed 汇合、预算刚好/超限、unsupported relation、partial graph；用户显式运行四类真实 P2 trace 场景的 P3 expansion smoke，同时报告原 P2 status 与新增任务相关 evidence，指标遵循下方 evaluation 设计。
 - **Known Limitations:** expansion 不能超过 P1/P2 已有事实能力；role catalog 限制和 unknown components 原样可见。
+- **Implementation / acceptance:** `arkui_agent.retrieval.expansion` 实现 versioned、有界 P2 observation 编排；[spec](../../specs/task-change-context/graph-expansion-v1.md)。trusted Hook 12/12、11 个真实 Task cases 与正式 frozen Change expansion 验收通过；用户于 2026-09-10 批准 [语义 gold](../../evaluation/p3-d-expansion-annotations.md)，所有 D AC 满足，见 [验收报告](../../evaluation/p3-d-expansion-smoke.md)。recall/无关比例保持 N/A；未改 P2 expected，未进入后续 milestone。
 
 ## P3-E — Task Subgraph and Context Candidate Materialization
 
@@ -284,6 +285,6 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 | 10 context metrics | C1–H 持续标注/验证；I 汇总 |
 | 11 bounded graph/source context | C1、D、E、H；I |
 
-## Current session: P3-C2 only
+## Current session: P3-D only
 
-C2 changed range → 双侧 symbol seeds 及 C1 integration 已完成，保留已完成 C1 与既有修改。trusted Hook 与用户显式授权的原冻结双 revision smoke 均通过；Phase 保持 In Progress，不进入 P3-D。
+D 语义 gold 已获用户批准并冻结，D Completed；P3 Phase 保持 In Progress，E/F 保持 Not Started。当前 session 到此收尾。
