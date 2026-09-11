@@ -1,7 +1,7 @@
 # P3 — Task / Change Retrieval & Context Builder
 
 - **Phase Status:** In Progress
-- **Planning:** P3-D 已完成；P3 Phase 保持 In Progress，不启动 P3-E 或后续 milestone。
+- **Planning:** P3-E 已完成修复后 Hook、真实 subgraph/snippet 验收与用户授权的语义 gold 冻结；P3 Phase 保持 In Progress，不启动 F/G/H/I。
 - **Phase Goal:** 复用 P1/P2，将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
 - **Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)，重点为 §4–6。
 - **Phase Boundary / Definition of Done:** [Phase map §6](../phase-map.md#6-p3--task--change-retrieval--context-builder)。
@@ -168,7 +168,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 ## P3-E — Task Subgraph and Context Candidate Materialization
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** 将召回与 expansion 观察整理为可独立供 ranking 消费的任务视图及证据单元。
 - **Dependencies:** D（复用 B/C1/C2）；供 G/H 使用。
 - **Scope:** Task/Change subgraph extraction、关系端点和 supporting evidence 闭包、trace-local association 独立表达、显式边界；只读 snippet materialization、range/hash 校验、重叠片段去重、统一 `ContextCandidateSet`。
@@ -177,10 +177,11 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Acceptance Criteria:** 所有 relation endpoints 可解析；文本命中和语义 evidence 可区分；snippet 来自所声明 revision/range；缺 source/range 返回明确限制；无悬空 candidate dependency；unknown/ambiguous/truncation 不在 extraction 中消失；序列化/反序列化后身份和关联保持；不需要 ranker 或 LLM。
 - **Tests / real validation:** 非 induced BFS 结果、共享 endpoint、association 非 edge、跨 revision snippet 拒绝、source drift、overlapping ranges；用户显式检查 Button creation、FontWeight property、Menu layout/overlay 的真实 subgraph/snippet provenance。
 - **Known Limitations:** subgraph 完整性仅相对于已观察和声明的检索范围；源码不可得时不能提供伪造 snippet。
+- **Implementation / acceptance:** `arkui_agent.context.materialization`、`snippets`、`candidate_serialization` 提供观察闭包与内部 ranking input v1，见 [spec](../../specs/task-change-context/context-candidates-v1.md)。BFS provenance 修复后 trusted Hook 12/12（76.592 秒）；四类五个核心真实 cases 与 Button text 补充检查通过。2026-09-10 按用户授权冻结 [evidence gold](../../evaluation/p3-e-materialization-annotations.md)，逐项 AC 复核无新缺口，见 [验收报告](../../evaluation/p3-e-materialization-smoke.md)。真实 Change 双侧 E smoke 非本 milestone 必需项，保留未验证至 P3-I；未运行 strict full，未进入 F。
 
 ## P3-F — Refresh / Rebuild Integration
 
-- **Status:** Not Started
+- **Status:** In Progress
 - **Goal:** 让 B 的知识契约获得可调用、失败可见的真实生产和刷新流程。
 - **Dependencies:** B、C1；建议 E 后执行以验证真实查询消费者，H 依赖本 milestone。
 - **Scope:** 手动 command/service 与 scheduler-invokable 单次入口；revision check、reason/force、no-op、全量 P1/P2 rebuild adapter、独立 generation、原子发布 manifest、失败保留 last usable、单 writer 排他/冲突拒绝；配置化 build coverage 与 compile database 输入。
@@ -285,6 +286,6 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 | 10 context metrics | C1–H 持续标注/验证；I 汇总 |
 | 11 bounded graph/source context | C1、D、E、H；I |
 
-## Current session: P3-D only
+## Current session: P3-E only
 
-D 语义 gold 已获用户批准并冻结，D Completed；P3 Phase 保持 In Progress，E/F 保持 Not Started。当前 session 到此收尾。
+E 修复后 Hook 与已规划真实 smoke 均通过，用户授权的 evidence gold 已冻结，AC 复核无新缺口，P3-E Completed。本次只更新收尾文档，不重跑测试/smoke/strict full。P3 Phase 保持 In Progress，F/G/H/I 保持 Not Started，不自动进入后续 milestone。
