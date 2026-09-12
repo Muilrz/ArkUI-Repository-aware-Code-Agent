@@ -1,7 +1,9 @@
 # ADR-0003: Multi-capability Repository-aware Engineering Agent
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0005](ADR-0005-code-review-service-pivot.md)
 - **Date:** 2026-09-07
+
+> 本 ADR 保留为历史决策记录。multi-capability Engineering Agent、generic Agent Runtime 和 Code Review/UT sibling capability 路线不再是当前产品方向；当前架构以 ADR-0005 与 `docs/architecture/technical-roadmap.md` 为准。
 
 ## Context
 

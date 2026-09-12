@@ -130,6 +130,27 @@ class ClangdSemanticProviderIntegrationTests(unittest.TestCase):
             "src/widget.cpp", {reference.file.path.as_posix() for reference in references}
         )
 
+    def test_bounded_scope_retains_cross_file_identity_references_and_calls(self) -> None:
+        paths = [RepositoryFile.from_path("include/fixture/widget.h"),
+                 RepositoryFile.from_path("src/widget.cpp")]
+        for i in range(5):
+            path = f"zz_padding_{i}.cpp"
+            (self.repository.root / path).write_text(f"int padding_{i};\n", encoding="utf-8")
+            paths.append(RepositoryFile.from_path(path))
+        facts = self.provider.symbol_observations_in_files(tuple(reversed(paths)))
+        methods = tuple(f for f in facts if f.symbol.qualified_name == "fixture::Widget::value")
+        self.assertEqual(len(methods), 2)
+        value, = canonicalize_symbols(methods)
+        self.assertEqual(value.definition.file.path.as_posix(), "src/widget.cpp")
+        self.assertLessEqual(len(self.provider._opened_documents), self.provider.MAX_OPEN_DOCUMENTS)
+        references = self.provider.references(value.identity)
+        self.assertIn("src/widget.cpp", {r.file.path.as_posix() for r in references})
+        if self.provider.supports_call_hierarchy:
+            self.assertIn("doubled_value", {s.display_name for s in self.provider.callers(value.identity)})
+            doubled = next(f.symbol for f in facts if f.symbol.display_name == "doubled_value")
+            self.assertIn("value", {s.display_name for s in self.provider.callees(doubled.identity)})
+        self.assertEqual((value,), canonicalize_symbols(tuple(reversed(methods))))
+
     def test_call_hierarchy_reports_direct_caller_and_callee(self) -> None:
         if not self.provider.supports_call_hierarchy:
             self.skipTest("installed clangd does not advertise call hierarchy support")

@@ -1,6 +1,6 @@
 # ArkUI Code Graph Architecture
 
-本文说明 P2 ArkUI Code Graph 的稳定结构和职责边界。长期系统方向以 [`technical-roadmap.md`](technical-roadmap.md) 为准；接口和行为细节以 [`../specs/code-graph/`](../specs/code-graph/README.md) 为准；milestone 状态和验收范围以 [已归档 P2 execution plan](../exec-plans/completed/P2-arkui-code-graph.md) 为准。
+本文说明 P2 ArkUI Code Graph 的稳定结构和职责边界，以及它在新 Code Review Service 中作为 `P2Provider` 的定位。长期系统方向以 [`technical-roadmap.md`](technical-roadmap.md) 为准；接口和行为细节以 [`../specs/code-graph/`](../specs/code-graph/README.md) 为准；milestone 状态和验收范围以 [已归档 P2 execution plan](../exec-plans/completed/P2-arkui-code-graph.md) 为准。
 
 ## Purpose
 
@@ -55,17 +55,35 @@ Trace 返回 complete、incomplete 或 ambiguous，并保留候选、缺口与�
 - 所有 traversal 有明确终止条件和预算；截断结果不宣称唯一完整。
 - Repository-derived graph、report 和 index 是可重建 runtime data，不进入 Git。
 
+## P2Provider position
+
+Repository Knowledge Service 通过 `P2Provider` adapter 复用 P2：
+
+```text
+existing P2 graph/query APIs
+            ↓
+        P2Provider
+            ↓
+ArkUI-specific evidence + provider freshness
+            ↓
+   KnowledgeGateway / ReviewContextPack
+```
+
+`P2Provider` 只做 capability/freshness/evidence normalization，不修改 P2 identity、relation、trace、provenance、partial 或 ambiguous 语义。Provider 必须报告其 repository revision/version；当 P2 stale 或 unavailable 时，Review 排除旧 revision 的 current-fact claims，并降级到 Docs + Live Source（以及可用 P1）。P2 在第一阶段是可选增强，不能成为 review availability 的硬门槛。
+
+未来 provider 内部可以采用任何安全 refresh 或 storage 优化，但新 Repository Knowledge 公共 contract 不要求 P2 实现 incremental projection、统一 snapshot 或 generation。
+
 ## Boundaries
 
 P2 不负责：
 
 - 自然语言 Task parsing；
-- task-driven graph expansion、ranking 或 Context Pack；
-- Agent planning/runtime；
+- review-specific context ranking 或 `ReviewContextPack` selection；
+- scheduler、review job、MCP 或 Skill orchestration；
 - ArkUI runtime execution、对象生命周期模拟或 UI rendering；
 - 源码修改、build、test 和 repair loop。
 
-这些能力分别属于 P3、P4 和 P5。通用 Lifecycle Trace 未纳入当前 P2 Definition of Done。
+已实现的 P3 task/change-driven graph expansion 是独立历史 contract；新路线可以在 KnowledgeGateway 中复用，但不回写 P2 frozen scope。通用 Lifecycle Trace 未纳入 P2 Definition of Done。
 
 ## Normative specifications
 

@@ -1,11 +1,39 @@
 """Repository workspace package."""
 
-from arkui_agent.repository.symbol_merge import SymbolMergeConflict, SymbolObservation, canonicalize_symbols
+from arkui_agent.repository.symbol_merge import (
+    CanonicalSymbolGroup, SymbolMergeConflict, SymbolObservation,
+    canonicalize_symbol_groups, canonicalize_symbols,
+)
 
 from arkui_agent.repository.clangd import (
     ClangdProtocolError,
     ClangdSemanticProvider,
     ClangdUnavailableError,
+)
+from arkui_agent.repository.dependency import (
+    ChangeKind as RepositoryChangeKind,
+    CompilationDatabaseProvider,
+    CompileContext,
+    CompileContextIdentity,
+    CompileContextInventory,
+    CompileContextProvider,
+    ConfigurationInput,
+    CoverageStatus as DependencyCoverageStatus,
+    DependencyImpact,
+    DependencyImpactAnalyzer,
+    DependencyMetadataProvider,
+    DependencyMetadataSnapshot,
+    DependencyRecord,
+    DiagnosticCode as DependencyDiagnosticCode,
+    ImpactDiagnostic,
+    ImpactStatus,
+    MakeDepfileDependencyProvider,
+    RepositoryChange,
+    ReverseDependencyIndex,
+    SemanticFileState,
+    SemanticFingerprintInput,
+    TranslationUnitIdentity,
+    normalize_repository_changes,
 )
 from arkui_agent.repository.index import (
     SYMBOL_INDEX_FILENAME,
@@ -63,6 +91,7 @@ from arkui_agent.repository.workspace import (
 )
 
 __all__ = [
+    "CanonicalSymbolGroup", "canonicalize_symbol_groups",
     "SymbolMergeConflict",
     "SymbolObservation",
     "canonicalize_symbols",
@@ -71,8 +100,23 @@ __all__ = [
     "ClangdProtocolError",
     "ClangdSemanticProvider",
     "ClangdUnavailableError",
+    "CompilationDatabaseProvider",
+    "CompileContext",
+    "CompileContextIdentity",
+    "CompileContextInventory",
+    "CompileContextProvider",
+    "ConfigurationInput",
     "DEFAULT_EXCLUDED_DIRECTORIES",
+    "DependencyCoverageStatus",
+    "DependencyDiagnosticCode",
+    "DependencyImpact",
+    "DependencyImpactAnalyzer",
+    "DependencyMetadataProvider",
+    "DependencyMetadataSnapshot",
+    "DependencyRecord",
     "RepositoryConfigurationError",
+    "RepositoryChange",
+    "RepositoryChangeKind",
     "RepositoryFile",
     "RepositoryFileType",
     "RepositoryPathError",
@@ -83,9 +127,12 @@ __all__ = [
     "RepositoryTextSearchError",
     "RepositoryWorkspace",
     "RepositoryWorkspaceError",
+    "ReverseDependencyIndex",
     "SemanticProvider",
     "SemanticProviderClosedError",
     "SemanticProviderError",
+    "SemanticFileState",
+    "SemanticFingerprintInput",
     "SYMBOL_INDEX_FILENAME",
     "SourceLocation",
     "SourceRange",
@@ -107,6 +154,11 @@ __all__ = [
     "TextSearchQueryError",
     "TextSearchResult",
     "TextSearchToolUnavailableError",
+    "TranslationUnitIdentity",
     "TestedSymbolMapping",
     "classify_repository_path",
+    "ImpactDiagnostic",
+    "ImpactStatus",
+    "MakeDepfileDependencyProvider",
+    "normalize_repository_changes",
 ]

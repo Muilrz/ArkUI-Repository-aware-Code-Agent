@@ -1,524 +1,301 @@
-# Code Review Architecture
+# Code Review Service Architecture
 
 ## 1. Purpose
 
-本文定义 ArkUI Repository-aware Code Agent 的长期在线代码检视架构。
+本文定义项目的核心业务架构：独立 Repository-aware Code Review Service。第一目标平台是 GitCode，第一阶段聚焦 Pull Request/diff 的 Stability、Memory / Resource / Lifetime 和 Functional Correctness review。
 
-第一目标平台为 **GitCode**，主要面向 Pull Request 在线检视；系统需要支持可配置轮询间隔、按 PR 作者用户名筛选、检视前 Repository Knowledge freshness check，以及基于 ArkUI 全仓 repository facts 的 Stability、Memory/Lifetime、Functional Correctness、Test Impact 等检视能力。
+本文定义未来边界；真实实现完成后，其 API、schema、不变量和失败语义进入 `docs/specs/`。最高层方向以 [Technical Roadmap](technical-roadmap.md) 为准。
 
-本文只定义 architecture boundary。未来真实实现的 API、配置字段、ReviewFinding schema、不变量和失败语义应在对应 milestone 完成时进入 `docs/specs/`。
-
----
-
-## 2. Architecture Position
+## 2. Architecture position
 
 ```text
-                     GitCode
-                       │
-                PR / Change Source
-                       │
-                       ▼
-                CodeHostProvider
-                       │
-                       ▼
-                  Review Watcher
-              ┌────────┼────────┐
-              │        │        │
-           interval   author   revision
-           trigger    filter    dedup
-              └────────┼────────┘
-                       ▼
-             Review Change Model
-                       │
-                       ▼
-             Knowledge Freshness Gate
-                       │
-                       ▼
-          P3 Change Retrieval & Context
-                       │
-                       ▼
-                Code Review Skill
-       ┌───────────────┼────────────────┐
-       ↓               ↓                ↓
-   Stability     Memory / Lifetime   Functional
-                       +
-                   Test Impact
-                       │
-                       ▼
-              Structured Findings
-                       │
-                       ▼
-                Review Publisher
-                       │
-                       ▼
-               GitCode Comments
-```
-
-Code Review 不重新实现 repository parser、semantic backend、symbol index 或 ArkUI graph。它消费 P1/P2/P3/P4 的共享能力。
-
----
-
-## 3. Code Host Provider Boundary
-
-上层 Review workflow 不直接绑定 GitCode HTTP/API schema。
-
-定义通用概念：
-
-```text
-CodeHostProvider
-        ↑
- GitCodeProvider
-```
-
-未来可以扩展：
-
-```text
-CodeHostProvider
-├─ GitCodeProvider
-├─ GitHubProvider
-└─ GiteeProvider
-```
-
-provider 至少为 Code Review 预留以下能力：
-
-### Read
-
-- discover/list pull requests；
-- get pull request metadata；
-- 获取 author username；
-- 获取 base/head revision；
-- 获取 changed files；
-- 获取 diff / changed hunks / source positions；
-- 获取已有 review/comment 状态（用于 dedup / update policy）。
-
-### Write
-
-- publish review summary；
-- publish inline finding/comment；
-- 必要时更新或标记 Agent 自己生成的 review state。
-
-认证、pagination、HTTP retry、GitCode 私有字段、comment position 映射和平台错误码全部留在 provider/adapter 内。
-
----
-
-## 4. Review Trigger and Watcher
-
-Code Review Skill 不负责长期轮询。
-
-长期 trigger 由独立 Review Watcher / orchestration 负责。
-
-### 4.1 Configurable Polling
-
-需要支持可配置轮询间隔，例如：
-
-```text
-10 minutes
-```
-
-但 `10 min` 只是配置示例，不作为硬编码架构常量。
-
-Watcher 周期执行：
-
-```text
-poll
- ↓
-list candidate PRs
- ↓
-filter
- ↓
-new review work?
- ↓
-submit Review Task
-```
-
-未来可以增加 webhook/event trigger，但不要求第一版同时实现；无论 trigger 来源如何，后续 Review Task contract 不应改变。
-
-### 4.2 Author Filter
-
-支持配置 PR author username allowlist/filter。
-
-逻辑上：
-
-```text
-PR author
-   ↓
-author in configured review set?
-   ├─ no  → ignore
-   └─ yes → continue
-```
-
-过滤发生在昂贵的 knowledge retrieval / LLM review 之前。
-
-### 4.3 Repository / Branch / Path Filters
-
-第一版核心需求是 author filter。架构为后续扩展预留：
-
-- repository
-- target branch
-- path include/exclude
-- labels / review state
-
-但不应在第一版为了通用配置框架扩大 scope。
-
----
-
-## 5. Review Identity and Deduplication
-
-同一个 PR 在没有新提交时，不应每个轮询周期重复 review、重复发评论。
-
-Review work identity 至少应包含：
-
-```text
-repository
-pull_request_identity
-head_revision
-```
-
-核心规则：
-
-```text
-PR #123 @ abc123
-already reviewed abc123
+GitCode PR / Diff
         ↓
-       skip
-
-PR #123 @ def456
-new head revision
+GitCodeProvider
         ↓
-      review
+PR Poller / Scheduler ──→ Review User Filter ──→ Revision Dedup
+                                                   ↓
+                                         Review Job Manager
+                                                   ↓
+                                            Review Engine
+                                                   ↕
+                                          KnowledgeGateway
+                                                   ↓
+                                  Repository Knowledge Service
+                            (Docs + Live Source + P1 + optional P2)
+                                                   ↓
+                                         ReviewContextPack
+                                                   ↓
+                                     Structured Review Findings
+                                                   ↓
+                                             Result Store
+                                                   ↓
+                         application API / MCP Server / Code Review Skill
 ```
 
-未来可加入：
+Service 是 review 生命周期的 owner。外部 Agent 可以触发或读取 review，但不负责 scheduler、filter、dedup、job state 或 result persistence。
 
-- review policy version；
-- knowledge snapshot identity；
-- manual force re-review；
-- finding fingerprint。
+## 3. Service components
 
-这些字段的最终 contract 由实现 spec 冻结。
+### GitCodeProvider
 
----
+隔离 GitCode authentication、pagination、HTTP retry/error、PR/diff schema 和 position mapping。平台无关层只消费稳定 domain models。
 
-## 6. Change Ingestion
+Read capabilities 至少规划：
 
-GitCodeProvider 将平台私有数据转换为平台无关的 Change model。
+- discover/list PR；
+- PR metadata、author、base/head SHA；
+- changed files、diff、hunks/ranges；
+- 必要的 source/review state。
 
-概念结构：
+未来若发布 comment，write capability 也必须留在 provider；Review Engine 不直接调用 GitCode API。
+
+### PR Poller / Scheduler
+
+按配置周期发现候选 PR 并提交 review work。轮询间隔不是硬编码常量。未来 webhook 可以作为新的 trigger adapter，但不改变 ReviewRequest contract。
+
+Scheduler 属于 Service，不属于 MCP、Skill 或外部 Agent。
+
+### Review User Filter
+
+按配置的 PR author username 集合过滤。过滤在昂贵的 knowledge/review 之前执行。`set_review_users` / `get_review_users` 管理的是 Service 配置，不把名单嵌入 Skill。
+
+### Revision Dedup
+
+最小 review identity：
 
 ```text
-ReviewChange
-├─ repository identity
-├─ pull request identity
-├─ author
-├─ base revision
-├─ head revision
-├─ changed files
-├─ changed hunks / ranges
-└─ platform provenance
+repository + pr_id + head_sha + review_policy_version
 ```
 
-随后使用 P1 semantic retrieval 将 changed range 尽可能映射到：
+同一 identity 已成功完成或正在由有效 claim 处理时，不创建重复 review。新 `head_sha` 或 policy version 是新工作。Force retry、failed retry 和 finding fingerprint 的细节由 R1/R3 spec 冻结。
 
-- changed symbol；
-- enclosing class / method；
-- declaration / definition；
-- direct references / callers / callees；
-- relevant tests。
+### Review Job Manager
 
-无法稳定映射到 symbol 的 diff 仍保留 file/range/text evidence，不通过名称猜测 symbol identity。
+负责：
 
----
+- 接受手动或自动 ReviewRequest；
+- job lifecycle、并发 claim、timeout/cancel/retry；
+- 调用 KnowledgeGateway 与 Review Engine；
+- 保存 degradation、failure 和 result identity；
+- 为 `get_review_status` / `get_review_result` 提供稳定查询。
 
-## 7. Knowledge Freshness Gate
+Job Manager 不实现通用 Agent planning 或任意 Tool/Skill runtime。
 
-检视前必须调用共享 Repository Knowledge lifecycle，而不是让 Reviewer 自己“重新理解全仓”。
+### Review Engine
 
-Repository Knowledge 的 snapshot、freshness 与 refresh 边界统一定义在 [`technical-roadmap.md`](technical-roadmap.md) 的 **Repository Knowledge Lifecycle** 章节；Code Review 这里只定义如何消费该共享能力。
+消费平台无关的 ReviewRequest + ReviewContextPack，执行固定 review policy，输出 zero or more validated `ReviewFinding`。它不轮询 GitCode、不刷新 provider 私有存储、不发布平台 comment。
 
-目标流程：
+### Result Store
+
+持久化：
+
+- review identity、request 和状态；
+- head/base revision 与 review policy version；
+- provider freshness/degradation summary；
+- structured findings；
+- failure/retry/audit diagnostics。
+
+Result Store 不保存一份私有全仓 Repository Knowledge 副本。
+
+## 4. Review request and ingestion
+
+Review 可来自：
+
+- `review_pr`：以 repository + PR identity 由 GitCodeProvider 获取 metadata/diff；
+- `review_diff`：调用者直接提供平台无关 diff/change input；
+- auto review：Scheduler 发现并通过同一 application API 提交。
+
+标准化输入至少包含：
 
 ```text
-ReviewChange(base/head revision)
-          ↓
-read current KnowledgeSnapshot
-          ↓
-check compatibility / freshness
-     ┌────┴─────┐
-   fresh      stale/unknown
-     ↓             ↓
-continue      refresh / rebuild
-                    ↓
-               publish snapshot
-                    ↓
-                 continue
+PR metadata
++ diff
++ changed files/hunks
++ base/head revision
++ review policy/version
 ```
 
-对 PR diff 的 review context，应明确记录使用的 snapshot identity。
+无法映射到 symbol 的 hunk 仍保留 file/range/text evidence，不以名称猜测 symbol identity。
 
-如果 refresh 失败且 snapshot 明显不适用于目标 change，不得静默把 stale knowledge 当作 fresh evidence。
+## 5. KnowledgeGateway and freshness
 
----
+Review Engine 只通过 KnowledgeGateway 获取 knowledge。Provider 结构与 freshness 详见 [Repository Knowledge Architecture](repository-knowledge-architecture.md)。
 
-## 8. Review Context Builder
-
-Code Review 复用 P3 Task / Change Retrieval & Context Builder。
-
-输入：
-
-- changed files / hunks；
-- changed symbols；
-- PR metadata；
-- KnowledgeSnapshot identity。
-
-候选 context 至少可来自：
-
-- changed source；
-- target symbol declaration / definition；
-- callers / callees / references；
-- inheritance / override；
-- ArkUI role / framework relation；
-- creation / property / layout / overlay trace（与 change 相关时）；
-- existing tests / tested-symbol mapping；
-- similar implementation / test evidence。
-
-输出结构化 `ReviewContextPack`，并保留：
-
-- changed evidence；
-- supporting repository evidence；
-- provenance；
-- ranking / inclusion reason；
-- token budget。
-
-不允许把整个 ArkUI graph 或全仓源码直接塞给 LLM。
-
----
-
-## 9. Code Review Skill
-
-Code Review Skill 描述 Review workflow 与 reasoning checklist，不承担 platform polling、knowledge persistence 或 HTTP 细节。
-
-逻辑流程：
+Context evidence：
 
 ```text
-ReviewContextPack
-       ↓
-understand change intent / affected behavior
-       ↓
-review by category
-       ↓
-validate evidence / impact
-       ↓
-produce zero or more ReviewFinding
+Docs evidence
++ Live Source evidence
++ P1 facts
++ optional P2 graph evidence
 ```
 
-第一版至少包含以下 category。
+关键规则：
 
-### 9.1 Stability
+- Live Source 必须对齐当前 head revision，是源码事实的最终 source of truth。
+- Freshness 按 Docs/Live Source/P1/P2 分别报告，不使用统一 Snapshot gate。
+- P1/P2 stale 时刷新或排除其 current-fact claims；不得静默使用旧 revision evidence。
+- P1/P2 stale/unavailable 不阻塞 `Docs + Live Source` review。
+- Provider degradation 与证据 gaps 进入 ReviewContextPack 和最终 result。
 
-关注包括但不限于：
+## 6. ReviewContextPack
 
-- null / invalid state；
-- range / boundary；
-- lifecycle mismatch；
-- duplicated registration / missing cleanup；
-- async/callback state transition；
-- error path / recovery path；
-- crash-prone assumptions。
+`ReviewContextPack` 至少包含：
 
-### 9.2 Memory / Lifetime
+- repository、PR/diff、base/head revision；
+- changed files/hunks/ranges；
+- Docs、Live Source、P1 和 optional P2 evidence；
+- 每个 provider 的 status/revision/version；
+- evidence provenance 和 inclusion reason；
+- stale/excluded provider、unsupported/ambiguous/truncated gaps；
+- context budget 和实际裁剪结果。
 
-重点结合 ArkUI C++ ownership/lifecycle context 关注：
+Context selection 应优先 change-local、可证明、可行动的 evidence。不得把全仓源码/graph 无约束塞入模型。旧 P3-A～E 能力可以被 adapter 复用，但新 Service contract 不以旧统一 KnowledgeSnapshot 为前提。
 
-- strong/weak reference 使用关系；
-- raw pointer lifetime；
-- lambda/callback capture；
-- registration/unregistration 对称性；
-- owner/callback cycle；
-- async task 持有对象生命周期；
-- evidence-supported leak / dangling risk。
+## 7. Review categories
 
-不能仅凭出现 `RefPtr`、`WeakPtr`、裸指针等文本模式就宣告泄漏；finding 必须有 supporting evidence。
+### Stability
 
-### 9.3 Functional Correctness
+关注 null/invalid state、range/boundary、error/recovery path、async/callback state、重复注册/遗漏清理、生命周期错配和 crash-prone assumption。
 
-关注：
+### Memory / Resource / Lifetime
 
-- change 是否遗漏必要分支；
-- property/state 是否正确传播；
-- Model/Pattern/Property/Layout 等 framework path 是否被破坏；
-- 修改与现有同类组件行为是否明显不一致；
-- API contract / default state / reset behavior 是否发生无意变化。
+关注 strong/weak/raw ownership、callback capture、registration/unregistration 对称性、资源 release、异步持有、cycle、dangling/leak 风险。仅有类型名或文本模式不足以产生强 finding。
 
-### 9.4 Test Impact
+### Functional Correctness
 
-结合 Test Mapping / Existing Test 判断：
+关注遗漏分支、状态/property 传播、ArkUI Model/Pattern/Property/Layout 路径、default/reset behavior、API contract 和与同类实现的有证据偏差。
 
-- 行为变化是否已有测试覆盖；
-- 是否新增边界路径但没有相应 UT；
-- 修改是否使旧测试假设失效；
-- 是否存在可明确指出的 coverage gap。
+测试源码和 test mapping 可以作为 correctness evidence 或 coverage suggestion，但本产品路线不包含 UT Development / Repair workflow。
 
-Code Review 可以建议补 UT；真正生成/修改测试由 UT Development capability 负责。
+## 8. ReviewFinding contract
 
----
-
-## 10. ReviewFinding Model
-
-Review reasoning 与平台评论文本分离，内部使用结构化 finding。
-
-概念字段：
+Finding 至少包含：
 
 ```text
-ReviewFinding
-├─ category
-├─ severity
-├─ confidence
-├─ file
-├─ source range / line
-├─ changed_symbol
-├─ title / summary
-├─ description
-├─ consequence
-├─ evidence
-├─ related_symbols
-├─ recommendation
-├─ knowledge_snapshot_identity
-└─ provenance
+file
+location/range
+category
+severity
+title
+description
+evidence
+reasoning
+suggestion
+confidence
 ```
 
-具体字段类型、severity 枚举、confidence 语义和 fingerprint 算法在实现 milestone 的 spec 中冻结。
-
-### Core Constraints
-
-- finding 必须定位到具体 change/source evidence；
-- finding 的 supporting claim 必须能追溯 P1/P2/P3 evidence；
-- 不确定时显式降低 confidence 或不发布；
-- 允许返回 **zero findings**；
-- 不通过“必须给每个 PR 留评论”的产品要求强迫模型制造问题。
-
----
-
-## 11. Review Publisher
-
-Publisher 把结构化 finding 转换为 GitCode review/comment。
-
-Publisher 负责：
-
-- inline position mapping；
-- summary formatting；
-- platform-specific limits / retry；
-- finding fingerprint / duplicate suppression；
-- publish result tracking。
-
-Publisher 不重新进行代码 reasoning。
-
-第一版应优先：
-
-- 少而准确的 finding；
-- 可追溯证据；
-- 防止重复评论；
-- 当位置映射失败时有明确降级策略（例如 summary 而不是伪造 inline location）。
-
----
-
-## 12. Configuration Boundary
-
-架构需要支持下列配置概念：
+Severity：
 
 ```text
-Code Review Config
-├─ code host / repository
-├─ polling interval
-├─ author username filter
-├─ knowledge refresh policy
-├─ review categories
-├─ publish mode
-└─ runtime limits
+Critical
+High
+Medium
+Low
 ```
 
-例如“每 10 分钟轮询”和“每天刷新知识”属于配置值，而不是写死在 Skill 代码中。
+约束：
 
-具体 YAML/TOML/env schema 等到对应 implementation milestone 再由 spec 冻结。
+- `file` 和 `location/range` 必须对应 change 或有明确相关性；
+- evidence 必须可追溯到 diff/Live Source/provider source 与 revision；
+- description 解释问题和后果，reasoning 连接证据与结论，suggestion 提供可行动方向；
+- confidence 不替代证据，provider stale/unknown 必须影响 confidence/claim；
+- 允许成功返回 zero findings；
+- Review Engine/validator 拒绝缺少必要定位、证据或枚举非法的 finding。
 
----
+## 9. Auto review lifecycle
 
-## 13. Safety, Quality and Failure Semantics
+```text
+Scheduler tick
+    ↓
+GitCodeProvider.list candidate PRs
+    ↓
+Review User Filter
+    ↓
+compute repository + pr_id + head_sha + policy version
+    ↓
+Revision Dedup
+    ├── seen/in-flight → skip with state
+    └── new → Review Job Manager
+                   ↓
+          knowledge + review
+                   ↓
+             persist result
+```
 
-Code Review 的目标不是最大化评论数量，而是最大化有证据、可行动 finding 的质量。
+`start_auto_review` / `stop_auto_review` 控制 Service scheduler。停止 auto review 不删除既有结果；进程重启后的 state/recovery 由 R1/R5 spec 冻结。
 
-至少坚持：
+## 10. MCP boundary
 
-1. **No evidence, no strong finding**：关键结论必须有 source/repository evidence。
-2. **No forced finding**：无问题 PR 可以返回成功且 zero findings。
-3. **No duplicate spam**：同一 PR head/finding 不因轮询重复发布。
-4. **No stale-knowledge masquerading**：知识 freshness 不满足时显式失败/降级。
-5. **No platform leakage**：GitCode 私有 schema 不进入 review reasoning contract。
-6. **No full-repo prompt stuffing**：全仓知识通过 retrieval/context 压缩后进入 LLM。
-7. **Explicit partial/unknown**：无法证明的 lifetime/functional path 不静默补全。
+MCP Server 暴露 application APIs，第一阶段至少规划：
 
----
+```text
+review_pr
+review_diff
+get_review_result
 
-## 14. Evaluation
+update_repo_knowledge
+rebuild_repo_knowledge
+get_knowledge_status
 
-Code Review evaluation 从 capability 开发阶段同步建立。
+set_review_users
+get_review_users
+
+start_auto_review
+stop_auto_review
+get_review_status
+```
+
+MCP 负责输入验证、稳定错误映射、认证/授权和结果序列化。它不复制 Review Engine、KnowledgeGateway、scheduler 或 Result Store logic，也不实现 Agent Runtime。
+
+## 11. Code Review Skill boundary
+
+Skill 面向 Codex、Claude 和其他支持 MCP 的 Agent，说明如何选择和组合 tools、轮询异步 result、解释 findings/freshness/degradation、处理 error 和遵守发布权限。
+
+Skill 不负责：
+
+- 持续 polling PR；
+- 保存 review users 或 dedup state；
+- GitCode HTTP/API；
+- provider refresh/cache/index；
+- review result persistence；
+- 通用 planning/state/retry loop。
+
+## 12. Safety and failure semantics
+
+1. **No evidence, no strong finding**：关键结论必须有可追溯证据。
+2. **No forced finding**：No-Issue change 可以 zero findings。
+3. **No duplicate review spam**：同一 review identity 不因 scheduler 重复处理。
+4. **No stale masquerading**：旧 P1/P2 revision 不作为当前确定事实。
+5. **Live Source authority**：当前源码与其他来源冲突时，以目标 revision Live Source 为准并记录冲突。
+6. **Graceful enhancement loss**：P1/P2 failure 降低能力但不阻塞 Docs + Live Source。
+7. **No platform leakage**：GitCode 私有 schema 不进入 engine/knowledge contract。
+8. **Explicit partial/unknown**：证据不足、ambiguous、truncated 和 provider error 不静默补全。
+
+## 13. Evaluation
 
 Benchmark 至少覆盖：
 
 - Stability issue；
-- Memory/Lifetime issue；
+- Memory / Resource / Lifetime issue；
 - Functional regression；
-- Missing/insufficient UT；
 - ambiguous/insufficient evidence；
-- **No-Issue PR / Change**。
+- stale P1/P2 degradation；
+- No-Issue PR/diff；
+- duplicate poll/retry/restart state；
+- GitCode/provider/MCP failure。
 
-指标至少考虑：
+指标至少包含 Finding Precision/Recall、False Positive Rate、Category/Severity/Location Accuracy、Evidence/Provenance Validity、Revision Alignment、Duplicate Review Rate、Review Latency、job success/recovery 和 MCP contract compatibility。
 
-- Finding Precision；
-- Finding Recall；
-- False Positive Rate；
-- Category Accuracy；
-- Severity Accuracy；
-- Evidence / Provenance Validity；
-- Duplicate Comment Rate；
-- Review Latency；
-- Tool Calls / Token Cost。
+## 14. Phase ownership
 
-Ablation 至少比较：
+- R0：Service/domain/port foundation。
+- R1：GitCodeProvider、PR state、users、identity/dedup。
+- R2：KnowledgeGateway、providers、freshness、update/rebuild、degradation。
+- R3：ReviewContextPack、Review Engine、finding validation/categories。
+- R4：MCP Server。
+- R5：Service-owned auto review 与 MCP-only Code Review Skill。
+- R6：formal evaluation、security/reliability/performance hardening。
 
-```text
-Diff-only LLM
-vs
-Diff + Text Retrieval
-vs
-Diff + Symbol Retrieval
-vs
-Diff + Code Graph
-vs
-Full Repository-aware Reviewer
-```
-
----
-
-## 15. Phase Ownership
-
-### P1 / P2
-
-提供 repository facts 和 ArkUI graph，不增加 GitCode polling。
-
-### P3
-
-提供 Change input、Knowledge Snapshot/Freshness、Review Context 所需 retrieval/context 能力。
-
-### P4
-
-提供 Tool/Skill runtime、state、trace 和 read-only agent behavior。
-
-### P5
-
-实现 CodeHostProvider/GitCodeProvider、Review Watcher、author filter、dedup、Code Review Skill、ReviewFinding、Publisher，以及 UT Development / Repair 等 Engineering Capabilities。
-
-### P6
-
-形成正式 Code Review benchmark、ablation 与 hardening。
-
-当前 P2 execution plan 和 Code Graph specs 不因本文新增需求而扩 scope。
+P1/P2 的 frozen contract 不因本架构扩大；旧 P3/P4/P5 路线不再是实现依赖。

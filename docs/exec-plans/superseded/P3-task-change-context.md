@@ -1,29 +1,36 @@
-# P3 — Task / Change Retrieval & Context Builder
+# P3 — Task / Change Retrieval & Context Builder (Superseded)
 
-- **Phase Status:** In Progress
-- **Planning:** P3-E 已完成修复后 Hook、真实 subgraph/snippet 验收与用户授权的语义 gold 冻结；P3 Phase 保持 In Progress，不启动 F/G/H/I。
-- **Phase Goal:** 复用 P1/P2，将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
-- **Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)，重点为 §4–6。
-- **Phase Boundary / Definition of Done:** [Phase map §6](../phase-map.md#6-p3--task--change-retrieval--context-builder)。
+- **Phase Status:** Superseded
+- **Status when superseded:** P3-A～E Completed；P3-F1 In Progress；F2～F6/G/H/I Not Started
+- **Superseded by:** [ADR-0005](../../decisions/ADR-0005-code-review-service-pivot.md) and the [R0–R6 phase map](../phase-map.md)
+- **Historical Phase Goal:** 在 P1/P2 之上建立 dependency-driven incremental Repository Knowledge lifecycle，并将自然语言/结构化 Task 或平台无关 Change 转换为版本可追溯、证据充分且满足 token budget 的结构化 Context Pack。
+- **Current Source of Truth:** [Technical roadmap](../../architecture/technical-roadmap.md)
+- **Historical Phase Boundary:** [Phase map historical phases](../phase-map.md#3-historical-phases)
 - **Dependencies:** [P1 completed plan](../completed/P1-repository-intelligence.md)、[P2 completed plan](../completed/P2-arkui-code-graph.md)、[P2 specs](../../specs/code-graph/README.md)。
 - **Evaluation inputs:** [P1 baseline](../../evaluation/p1-retrieval-baseline.md)、[P2 baseline](../../evaluation/p2-code-graph-baseline.md)。冻结 expected 保持在既有 fixtures 中。
 
-## Authority and planning decisions
+> 本计划未完成，因此没有标记 Completed。A～E 的完成状态和对应 specs/evaluation 继续是历史事实；F1 及其后续 milestone 已停止，不得从本文件继续开发。旧代码和文档保留，是否由 R 路线复用须在新的 active plan 中明确决定。
 
-本文件定义拟实施范围和验收门槛，不把规划字段当作已实现 API。各 milestone 实现时将行为、类型、不变量及失败语义写入 `docs/specs/task-change-context/`；P3-B 共享知识读取契约统一见其中的 `knowledge-snapshot-v1.md`。不创建空 spec 或复制 P2 contract。完成后本计划只保留范围、验收索引和简要结果。
+## Historical authority and planning decisions
 
-核对结果：roadmap 与 phase-map 的 P3 能力边界一致，没有需要重写总体架构的冲突。存在以下文档状态差异：
+以下内容保留 supersession 时的规划和验收门槛，仅用于解释历史，不再授权实施。已实现行为仍以 `docs/specs/task-change-context/` 为准；旧共享知识草案保留在 `docs/specs/repository-knowledge/`。当前 provider-based 长期架构见 [`repository-knowledge-architecture.md`](../../architecture/repository-knowledge-architecture.md)，迁移决策见 [`ADR-0005`](../../decisions/ADR-0005-code-review-service-pivot.md)。
 
-- `AGENTS.md` 的当前阶段仍停留 P2；本次仅同步为 P2 completed、P3 planning。
-- `docs/README.md` 原引用不存在的 `repository-knowledge-lifecycle.md`；ADR-0003 Follow-up 与 Code Review architecture 均明确由 roadmap 统一维护生命周期，本次将导航指向 roadmap §4。
-- 已完成 P2 计划中的历史 validation 流程保留归档；本次及后续开发遵循当前 AGENTS.md，不据此自动执行 strict full。
-- phase-map 末尾“本次长期路线修订不创建新的 active plan”是前次路线修订的范围记录；本次用户已明确要求进入 P3 规划，不修改该历史说明。
+### Architecture migration directive
+
+本计划替换旧的“repository revision 变化 → 默认 full P1/P2 rebuild”路线。应用本文件时必须遵守：
+
+- 不回写或篡改 P1/P2 completed plan 的历史完成事实；
+- 不修改 frozen P2 relation expected / baseline 来让增量实现“通过”；
+- P1/P2 现有 public query contracts 能复用则保持兼容；增量能力优先通过新的 lifecycle/storage/provider 边界接入；
+- 已存在的旧 P3-F 代码不得盲目删除。manifest、generation、lock、refresh service、full rebuild adapter 等若符合新 contract，应迁移为 F5/F6 或 fallback path；
+- full rebuild 继续作为 bootstrap/recovery/fallback，但不再是高频源码变化的默认策略；
+- 实时状态已核对为 P3 Phase In Progress、A–E Completed、旧 F In Progress；架构迁移后保持 A–E Completed，将 F1 作为新的当前 In Progress milestone，F2–F6/G/H/I 保持未开始，除非实时工作区随后已有更新。
 
 ### 1. 从 representation 开始，紧接 snapshot 读取契约
 
 P3-A 先确定 Task/Change 的输入、坐标、revision intent、解析来源与 unresolved 状态。检索 orchestration 必须先知道检索什么、针对哪个 revision、哪些信息只是 hint。先做 refresh engine 会把工作扩大到全仓准备和发布流程，无法独立验证最早的输入边界。
 
-P3-B 随即落实 KnowledgeSnapshot identity、freshness check 与只读 session binding。P3-C1 起所有真实查询均消费此绑定；P3-F 再实现完整 refresh/rebuild entry point。早期允许调用方显式提供已构建且能验证的 manifest，不能临时用任意字符串伪装 fresh。这样不依赖自动 refresh，也不在最后补装版本一致性。
+P3-B 已完成 KnowledgeSnapshot identity、freshness check 与固定 generation 的只读 `SnapshotSession` 绑定；P3-C1 起所有真实查询均消费该既有 contract。新架构不追溯修改 B 的完成事实：基于 immutable shard membership 的 `SnapshotQueryView`、parent generation 与写侧 publication contract 由 P3-F5 扩展。P3-F1–F6 再逐步实现 dependency impact、P1/P2 incremental lifecycle 与完整 refresh entry point。
 
 ### 2. P1/P2 接入 candidate retrieval 的接口
 
@@ -38,7 +45,7 @@ P3-B 随即落实 KnowledgeSnapshot identity、freshness check 与只读 session
 | Tests | `SymbolIndex.find_test_fixtures / find_test_cases / test_cases_for_fixture / test_cases_for_symbol / tested_symbol_mappings_for_symbol` | typed test candidates 保留 mapping evidence；名称/文本找到的相似测试不冒充 tested-symbol mapping |
 | Graph / domain | `GraphSnapshot.query()` → `GraphQuery.node / incoming_edges / outgoing_edges / neighbors / traverse`，`DomainMap.lookup / members` | C1 暴露显式 seed 的直接 graph 候选；D 才选择任务相关 expansion policy，不更改 P2 traversal |
 | Domain trace | 现有 `trace_component_creation / trace_property_update / trace_measure_layout / trace_overlay` | D 按可证明的 seed 调用；保留 trace-local association、status、gaps、candidates、exhaustive，不把 association 转为 CALL |
-| Semantic backend | `SemanticProvider`，当前实现 `ClangdSemanticProvider` | clangd 通过 P1 收集并进入 index，主要在 F rebuild 使用；candidate orchestration 不临时启动私有 semantic 查询补洞 |
+| Semantic backend | `SemanticProvider`，当前实现 `ClangdSemanticProvider` | clangd 通过 P1 producer/adapter 为 F3 重建 affected TU；candidate orchestration 不临时启动私有 semantic 查询补洞，也不依赖 clangd 私有 `.idx` 作为 Repository Knowledge contract |
 
 P1 没有统一 Task retrieval orchestrator，也没有跨 artifact freshness manager。P2 `snapshot_key` 是调用方提供的 scope key，不自动证明 Git revision 一致。现有 evaluation preparation 是选定文件/查询的 harness，不能直接充当生产全仓知识管理器。
 
@@ -60,7 +67,7 @@ Context ranking / tiers (G)
         ↓
 Token selection + Context Pack (H)
 
-Refresh / rebuild (F) → 复用 B 的 binding，供 C1–H 查询前调用
+Incremental Repository Knowledge (F1–F6) → 复用 B 的 binding，供 C1–H 查询前调用
 Evaluation annotations 自 A 开始，阶段检查随 C1–H 累积，I 汇总真实验收
 ```
 
@@ -76,30 +83,35 @@ Evaluation annotations 自 A 开始，阶段检查随 C1–H 累积，I 汇总�
 
 Task 针对显式目标 revision；Change 保留 base/head、old/new path、old/new range 与 diff provenance。默认 supporting context 针对 head；deleted/base-only 内容来自 base-side evidence。没有 base snapshot 时保留 deletion hunk 并报告 base symbol unresolved，不能拿 head 同行号或同名 symbol 替代。跨 revision 的 identity 不假设可直接比较。
 
-B 的 snapshot manifest 覆盖 repository identity/revision、P1 index/P2 graph/domain metadata identity/version、build scope/config/toolchain fingerprint、built_at、build/freshness 与 refresh metadata，并区分 latest attempt 和 last usable snapshot。build scope 必须显式，选定文件的 evaluation index 不可宣称全仓完整。
+B 的 snapshot manifest 覆盖 repository identity/revision/generation、parent snapshot、P1 semantic manifest、P2 graph manifest、dependency/build configuration、schema/tool/ruleset identity、build scope/coverage、built_at、build/freshness 与 refresh metadata，并区分 latest attempt 和 last usable snapshot。Snapshot 是 logical manifest，不要求每个 generation 复制一份完整物理数据库。build scope 必须显式，选定文件的 evaluation index 不可宣称全仓完整。
 
-fresh/stale/building/failed/unknown 语义遵循 roadmap；未知 revision、dirty checkout、index/graph 不一致、源码查询期间变化不能标 fresh。默认阻止不兼容的混合知识；允许调用方显式请求降级并在结果记录限制，不由 P3 替具体 capability 决定接受 stale 的业务政策。查询绑定的 artifacts 不可被就地 rebuild 覆盖；B 先用校验和失败保护，F 实现独立 generation 发布。当前 rg 查询和 snippet 读取仍接触 source workspace，必须验证其与绑定 revision/source fingerprint 一致；不能因为 index 已绑定就忽略源码变化。
+fresh/stale/building/failed/unknown 语义遵循 roadmap；未知 revision、dirty checkout、P1/P2 manifest 不一致、源码查询期间变化不能标 fresh。默认阻止不兼容的混合知识；允许调用方显式请求降级并在结果记录限制，不由 P3 替具体 capability 决定接受 stale 的业务政策。查询绑定的 published shard/version 不可被就地覆盖；B 定义只读 session，F5/F6 实现独立 generation 与 atomic publication。当前 rg 查询和 snippet 读取仍接触 source workspace，必须验证其与绑定 revision/source fingerprint 一致。
 
-F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role mapper → framework extractor → store，第一版允许全量 rebuild。manual 与外部 scheduler 调用同一单次 entry point，支持 reason/force、revision 未变且配置兼容时 no-op；不实现 scheduler daemon、PR polling 或 Code Host adapter。
+F1–F6 在不改变 P1/P2 语义 contract 的前提下补齐增量 lifecycle：Change/Dependency Impact → P1 semantic shard/ownership → P1 delta → P2 derived-fact invalidation/incremental projection → snapshot/query view → refresh planner/atomic publish。manual 与外部 scheduler 调用同一单次 entry point；不实现 scheduler daemon、PR polling 或 Code Host adapter。
 
 ## Milestone sequence
 
-仅当用户开始对应开发任务时设为 `In Progress`；AC 与必需验证全部通过后才 `Completed`，不得自动进入下一 milestone。
+架构迁移后，P3-F 拆为 F1–F6。状态以实时工作区为准；下表描述依赖顺序，不要求重做已经通过且不受新架构影响的 A–E。
 
 | Milestone | Core goal | Dependencies |
 | --- | --- | --- |
 | P3-A | Task/Change representation 与解析边界 | P1/P2 completed |
-| P3-B | KnowledgeSnapshot manifest、freshness 与只读绑定 | A |
+| P3-B | 既有 KnowledgeSnapshot manifest、freshness 与固定-generation 只读 SnapshotSession | A |
 | P3-C1 | 多通道 candidate retrieval | A、B |
 | P3-C2 | Change ranges → symbol seeds | C1 |
 | P3-D | Task/Change-driven Graph Expansion | C1、C2 |
 | P3-E | Task Subgraph、snippet materialization 与统一 candidate set | D |
-| P3-F | manual/scheduler-invokable refresh integration | B、C1；建议 E 后实施 |
+| P3-F1 | Change Detection、Compile Context 与 Dependency Impact foundation | B；P1 public contracts |
+| P3-F2 | P1 immutable Semantic Shard、fact ownership 与 visibility storage | F1 |
+| P3-F3 | P1 affected-TU incremental semantic refresh 与 P1 Delta | F1、F2 |
+| P3-F4 | P2 derived-fact provenance/ownership 与 incremental graph refresh | F3；既有 P2 semantics |
+| P3-F5 | immutable KnowledgeSnapshot generation、Snapshot Query View 与 atomic publication primitives | B、F2、F4 |
+| P3-F6 | Refresh Planner / Orchestrator：NO_OP / INCREMENTAL / FULL_REBUILD | F1–F5；C1 可作为 read consumer |
 | P3-G | Context Ranking 与 tiering | E |
-| P3-H | token selection 与 Context Pack v1 | F、G |
-| P3-I | 真实 expansion/context baseline 与 P3 收尾 | A–H |
+| P3-H | token selection 与 Context Pack v1 | F6、G |
+| P3-I | 真实 incremental refresh + expansion/context baseline 与 P3 收尾 | A–H、F1–F6 |
 
-建议 session 顺序为 A → B → C1 → C2 → D → E → F → G → H → I。F 不依赖 ranking 算法，G 不依赖 rebuild 实现，但两者必须在 H 汇合。C1/C2 分拆是为避免多通道编排和双 revision 坐标映射挤入同一次任务；其他 milestone 不按通道或 trace family 机械拆碎。
+推荐在进入 H 前完成 F1 → F2 → F3 → F4 → F5 → F6。G 与 F1–F6 可以在依赖允许时并行开发，但 H 必须消费已冻结的 snapshot/query binding。若旧 P3-F 已有实现，先按 migration directive 将可复用部分映射到 F5/F6/fallback，不要重新从零实现。
 
 ## P3-A — Task / Change Representation and Parsing Boundary
 
@@ -117,15 +129,13 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 ## P3-B — Knowledge Snapshot Read Contract and Freshness
 
 - **Status:** Completed
-- **Goal:** 在第一条多通道查询前确保所有 evidence 有一致且可核验的知识来源。
-- **Dependencies:** A；为 C1–H 提供绑定接口，F 复用同一 manifest。
-- **Scope:** typed manifest、repository/revision/build scope 身份、freshness evaluation、读取和验证显式预构建 artifacts、query session binding、source revision/hash 检查；last usable 与 latest attempt 分离。
-- **Non-goals:** 自动 rebuild、长期 scheduler、多版本缓存优化、把 graph key 直接当 Git revision。
-- **Deliverables:** snapshot/freshness spec、只读 manifest adapter、检查入口和 temporary repository integration fixtures。
-- **Acceptance Criteria:** 五种 freshness 语义可区分；old index/new graph 或未知 revision 不得 fresh；dirty/source drift 明确拒绝或降级；覆盖范围不足区别于 stale；合法预构建 snapshot 可绑定并供查询复用；缺失/损坏 manifest 不能静默产生空 fresh snapshot；状态和诊断可序列化。
-- **Tests / real validation:** 临时 Git repository 的 revision transition、dirty source、混合 artifact、工具/规则配置变化、scope mismatch、读取期间变化；人工核对 P2 fixture preparation scope 可被 manifest 表达。真实大仓库 refresh 尚非本 milestone 验收条件。
-- **Known Limitations:** 不负责生产已有 index 的 revision 证明；没有可信 manifest 的遗留 artifact 为 unknown，需要 F rebuild 或显式验证流程。
-- **Implementation / acceptance:** `arkui_agent.knowledge` 实现 manifest、freshness、prebuilt read adapter 与固定 generation session；contract 见 [knowledge snapshot v1](../../specs/task-change-context/knowledge-snapshot-v1.md)。Stop Hook 已验证 26 个模型/temporary Git/P1/P2 tests 通过；P2 preparation 可表达为 selected-files scope，B 收口。
+- **Goal:** 在第一条多通道查询前确保所有 evidence 有一致且可核验的知识来源。该 milestone 的完成事实保持不变；增量 shard-aware Query View 属于 F5，而不是追溯要求 B 重做。
+- **Dependencies:** A；为 C1–H 提供既有固定-generation 读取绑定，F5/F6 继续复用并扩展。
+- **Scope:** typed manifest、repository/revision/build scope 身份、freshness evaluation、读取和验证显式预构建 artifacts、固定 generation 的只读 session binding、source revision/hash 检查；last usable 与 latest attempt 分离。
+- **Non-goals:** dependency invalidation、semantic/graph shard storage、自动 refresh、长期 scheduler、parent-manifest reuse、shard-aware SnapshotQueryView、写侧 atomic publication。
+- **Deliverables:** 已实现的 snapshot/freshness spec、只读 manifest adapter、检查入口和 temporary repository integration fixtures；权威 contract 继续见 `docs/specs/task-change-context/knowledge-snapshot-v1.md`。
+- **Acceptance Criteria:** 保持既有 B contract：五种 freshness 语义可区分；old index/new graph 或未知 revision 不得 fresh；dirty/source drift 明确拒绝或降级；覆盖范围不足区别于 stale；合法预构建 snapshot 可固定 generation 绑定并供查询复用；缺失/损坏 manifest 不能静默产生空 fresh snapshot。
+- **Implementation / acceptance:** `arkui_agent.knowledge` 已实现 manifest、freshness、prebuilt read adapter 与固定-generation session，B 已完成。F5 将在不破坏该读取 contract 的前提下增加 immutable shard membership、parent generation、SnapshotQueryView 与 publication primitives；不得把这些新要求伪装成 B 当时已经实现。
 
 ## P3-C1 — Multi-channel Candidate Retrieval
 
@@ -179,23 +189,78 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Known Limitations:** subgraph 完整性仅相对于已观察和声明的检索范围；源码不可得时不能提供伪造 snippet。
 - **Implementation / acceptance:** `arkui_agent.context.materialization`、`snippets`、`candidate_serialization` 提供观察闭包与内部 ranking input v1，见 [spec](../../specs/task-change-context/context-candidates-v1.md)。BFS provenance 修复后 trusted Hook 12/12（76.592 秒）；四类五个核心真实 cases 与 Button text 补充检查通过。2026-09-10 按用户授权冻结 [evidence gold](../../evaluation/p3-e-materialization-annotations.md)，逐项 AC 复核无新缺口，见 [验收报告](../../evaluation/p3-e-materialization-smoke.md)。真实 Change 双侧 E smoke 非本 milestone 必需项，保留未验证至 P3-I；未运行 strict full，未进入 F。
 
-## P3-F — Refresh / Rebuild Integration
+## P3-F1 — Change Detection, Compile Context and Dependency Impact
 
 - **Status:** In Progress
-- **Goal:** 让 B 的知识契约获得可调用、失败可见的真实生产和刷新流程。
-- **Dependencies:** B、C1；建议 E 后执行以验证真实查询消费者，H 依赖本 milestone。
-- **Scope:** 手动 command/service 与 scheduler-invokable 单次入口；revision check、reason/force、no-op、全量 P1/P2 rebuild adapter、独立 generation、原子发布 manifest、失败保留 last usable、单 writer 排他/冲突拒绝；配置化 build coverage 与 compile database 输入。
-- **Non-goals:** scheduler daemon、自动拉取/checkout target、PR polling、增量 index/graph、新 semantic backend 或全仓无限重试。
-- **Deliverables:** shared refresh service/CLI、P1/P2 build adapters、生命周期 spec、refresh integration tests 与可复用真实 smoke 入口。
-- **Acceptance Criteria:** 不调用带 frozen expected 的 evaluation harness 生产知识；使用公开 P1/P2 primitives；manual/scheduler 调用同一服务；revision 未变且配置兼容可 no-op，force 可重建；任一 stage 失败或 revision/source 漂移均不发布 fresh；旧绑定保持原 generation；writer 冲突显式失败；输出可被 C1–E 使用。配置全仓 scope 时覆盖声明的 scanner 范围，失败/未支持文件有报告；小范围 smoke 不宣称全仓验收。
-- **Tests / real validation:** temporary repository 真实 rebuild/read round-trip、失败注入在 adapter I/O 边界、manifest 发布失败、两次刷新冲突、rule/config 变化；用户显式触发 ArkUI 指定 scope refresh → retrieval/expansion，再做配置全仓范围的验收并记录 coverage/未支持项。缺外部工具/compile configuration 不算通过。
-- **Known Limitations:** 第一版全量 rebuild 成本可能高；性能优化需测量后另立任务，不作为提前实现 incremental 的理由。
+- **Goal:** 为高频源码变化建立可证明的 affected-TU 计算，不再把“repository revision changed”直接等价为 full rebuild。
+- **Dependencies:** B；复用 P1 workspace/scanner/config/provider 边界。
+- **Scope:** repository diff/change normalization、compile command/context identity、TU identity、dependency metadata adapter、reverse dependency lookup、header/config → affected TU propagation、semantic fingerprint input model、impact diagnostics；dependency source 可以来自 compile/build dep metadata 或可验证的 compiler-derived source，具体 backend 隔离在 adapter 后。
+- **Non-goals:** 重新解析 affected TU、写 semantic facts、P2 graph refresh、scheduler daemon、只靠文本 `#include` 扫描宣称完整 dependency graph。
+- **Deliverables:** dependency/impact model 与 service、backend adapter contract、对应 repository-knowledge spec/tests。
+- **Acceptance Criteria:** `.cpp` 变化至少命中自身 TU；header 变化传播到直接/传递依赖 TU；compile command/relevant config 变化使对应 TU fingerprint 变化；dependency coverage 不足返回 unknown/degraded/fallback reason；相同输入 canonical output 稳定；不把未证明完整的依赖结果标为 safe incremental。
+- **Tests / real validation:** temporary C++ fixture 覆盖 direct/transitive header、多个 TU、compile flag 改动、文件删除/rename、缺 dependency metadata；用户显式在 ArkUI 选定 scope 比较 changed files → affected TUs 与 build metadata。
+
+## P3-F2 — P1 Semantic Shard Versioning and Fact Ownership
+
+- **Status:** Not Started
+- **Goal:** 让 P1 persistent knowledge 支持 immutable semantic shard version 与 shared fact ownership，为 copy-on-write generation 奠定存储基础。
+- **Dependencies:** F1；保持现有 P1 retrieval facade 兼容。
+- **Scope:** logical `SemanticShardId/Version`、TU/fingerprint binding、fact canonical identity 与 ownership、immutable published shard、candidate/unpublished shard、snapshot visibility primitives、replacement/removal semantics、schema migration boundary；允许 single/few SQLite stores，不要求一 TU 一文件。
+- **Non-goals:** Base+Delta/LSM、复杂 compaction、P2 graph、跨 repository fact dedup、改变 P1 symbol identity 语义。
+- **Deliverables:** P1 shard/ownership storage API、migration/spec、query-index compatibility tests。
+- **Acceptance Criteria:** 新 shard 不原地修改 published old shard；shared fact 撤销一个 owner 后仍可由其他 owner 保留；owner 归零后在新视图消失；旧 snapshot/session 仍可读取旧 shard；普通 symbol/reference/test query 通过索引执行，不扫描全部 shard；损坏/冲突显式失败。
+- **Tests / real validation:** multi-owner header fact、TU replacement、deletion、old/new visibility、transaction failure、query latency smoke；不以创建大量 SQLite 文件作为分片实现。
+
+## P3-F3 — P1 Incremental Semantic Refresh and Delta
+
+- **Status:** Not Started
+- **Goal:** 只对 F1 的 affected TUs 调用 semantic producer，并形成可供 P2 消费的结构化 P1 Delta。
+- **Dependencies:** F1、F2；复用 `SemanticProvider` / `ClangdSemanticProvider`。
+- **Scope:** fingerprint reuse/no-op、affected-TU semantic production、candidate shard build、ownership diff、added/removed/changed facts、touched symbols/files、coverage diagnostics、P1-level full rebuild fallback adapter。
+- **Non-goals:** 使用 clangd 私有 `.idx` 作为持久化 contract、P2 projection、task retrieval、无限重试。
+- **Deliverables:** incremental P1 refresher、`P1Delta` contract/spec、integration tests 和 reusable full-build fallback。
+- **Acceptance Criteria:** unaffected TU 不调用 semantic producer；fingerprint unchanged 可复用；header impact 仅重建 F1 判定的 safe affected set；producer/IO/source drift 失败不发布 candidate P1 state；P1 Delta 可稳定表达 add/change/delete；同一最终源码的 incremental P1 view 与 full rebuild 在受支持 facts 上等价。
+- **Tests / real validation:** temporary repo incremental-vs-full conformance、删除/rename、header fan-out、compile flag 变化、producer failure；用户显式 ArkUI 小范围变更 smoke 记录 rebuilt/reused TU/shard counts。
+
+## P3-F4 — P2 Incremental Graph Refresh
+
+- **Status:** Not Started
+- **Goal:** 让 P2 不再在每次 P1 小变化后默认全量 projection，而是根据 P1 Delta 和 derived-fact provenance 更新受影响 graph/domain facts。
+- **Dependencies:** F3；既有 P2 graph/domain semantics、trace specs 与 frozen baseline 不变。
+- **Scope:** derived-fact provenance/ownership、rule/ruleset identity、invalidation scope metadata、P1 Delta → affected derivations、incremental generic projection、role/framework relation refresh、graph derivation shard/partition replacement、rule-level/wide-scope/full-P2 fallback。
+- **Non-goals:** 修改 frozen relation expected、补齐历史 missing relation、通过增量机制发明新 CALL/ArkUI edge、要求所有规则第一版都支持精确局部 invalidation。
+- **Deliverables:** P2 incremental projection API、`P2Delta/Impact` 或等价 contract、storage/provenance spec 更新、conformance tests。
+- **Acceptance Criteria:** unchanged derivations 可复用；失效 fact 不在新 graph view 残留；所有增量 derived facts 保留与 full projection 同等 provenance；无法证明局部失效的规则显式扩大 scope/fallback；相同源码/ruleset 下 incremental result 与 full P2 rebuild 在规范化 graph/domain facts 上等价；frozen P2 baseline 不因迁移被改 gold。
+- **Tests / real validation:** generic edge add/remove、shared endpoint、role/framework rule impact、ruleset change、fallback path；用户显式在已有 Button/Text/Menu cases 对 incremental vs full graph 做规范化 diff。
+
+## P3-F5 — Snapshot Generation, Query View and Atomic Publication Primitives
+
+- **Status:** Not Started
+- **Goal:** 把 B 的 read contract 与 F2/F4 的 versioned artifacts 连接成 immutable logical generation，并保证查询性能不随 shard 数线性退化。
+- **Dependencies:** B、F2、F4。
+- **Scope:** semantic/graph manifest identity、parent generation、candidate vs published state、active shard membership 或等价 visibility index、`SnapshotSession` realization、atomic generation switch、old-reader preservation、retention/GC safety metadata；query path 保持 P1/P2 indexed facade。
+- **Non-goals:** refresh strategy 决策、scheduler daemon、Base+Delta compaction、删除仍被 reader/retained snapshot 引用的 shard。
+- **Deliverables:** manifest store、query-view binding、publication primitives、repository-knowledge spec/tests。
+- **Acceptance Criteria:** Generation N 与 N+1 可共享未变 shard；publish 前 candidate 对普通 reader 不可见；publish 原子切换 current generation；已绑定 N 的 session 在 N+1 发布后仍读 N；symbol/relation query 不扫描全部 manifest/shards；失败 publish 保留 last usable；GC 只标记/删除无引用安全对象。
+- **Tests / real validation:** concurrent old reader/new publish、manifest corruption、publish crash injection、membership query、retention/GC roots、query latency 随 shard 数增长的 smoke。
+
+## P3-F6 — Refresh Planner and Incremental Orchestration
+
+- **Status:** Not Started
+- **Goal:** 提供 manual/scheduler-invokable 的统一 refresh service，把 F1–F5 组织成可观测、可回退、失败安全的生产流程。
+- **Dependencies:** F1–F5；C1 可作为 snapshot-bound read consumer；H 依赖本 milestone。
+- **Scope:** target revision/config resolve、reason/force、single-writer、`NO_OP / INCREMENTAL / FULL_REBUILD` planning、P1/P2 stage orchestration、candidate validation、source drift recheck、atomic publish、last usable/latest attempt、coverage/metrics report、配置化 full rebuild fallback。
+- **Non-goals:** scheduler daemon、自动拉取/checkout target、PR polling、GitCode provider、无限重试、在 planner 中实现新的 semantic/graph facts。
+- **Deliverables:** shared refresh service/CLI、planner policy/spec、full fallback adapter、integration tests 与可复用真实 smoke entry point。
+- **Acceptance Criteria:** revision/config unchanged 可 NO_OP；safe small change 默认走 incremental；dependency/schema/ruleset incompatibility 可选择 wider/full fallback；force 可 full rebuild；任一 stage/source drift/validation/publish 失败均不发布 fresh candidate；old session 保持原 generation；writer conflict 显式失败；报告 changed files、affected TUs、reused/rebuilt P1/P2 shards、strategy 与 timing；输出可直接被 B/C1–H 消费。
+- **Tests / real validation:** temporary repository incremental round-trip、incremental-vs-full equality、失败注入、writer conflict、rules/config change、large-impact fallback；用户显式触发 ArkUI 指定 scope incremental refresh → retrieval/expansion，并单独运行 full fallback 作 correctness comparison。昂贵全仓验证仍由用户显式触发。
+- **Known Limitations:** 第一版不承诺所有 P2 rule 都精确局部增量，也不引入 Base+Delta；任何 unknown invalidation 必须扩大 scope/fallback，不能以性能为由牺牲 freshness correctness。
 
 ## P3-G — Context Ranking and Tiering
 
 - **Status:** Not Started
 - **Goal:** 对 E 的候选做可解释排序，表达 Tier 1/2/3 的任务相关性。
-- **Dependencies:** E；H 消费结果，可与 F 独立验收。
+- **Dependencies:** E；H 消费结果，可与 F1–F6 独立验收。
 - **Scope:** deterministic feature-based ranker、target/changed evidence、direct dependency、graph distance、channel/provenance strength、test relevance、tiers 和稳定 tie-break；同一 ranker 支持 Task/Change。
 - **Non-goals:** token selection、LLM reranker 依赖、用 ranking 解决 symbol ambiguity、创建新的事实。
 - **Deliverables:** ranked candidate model、ranking policy/spec、独立人工 relevant/required annotation、ranking tests。
@@ -207,7 +272,7 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 - **Status:** Not Started
 - **Goal:** 输出可直接供后续 P4 消费的稳定、可追溯且受预算约束的 Task/Change Context Pack。
-- **Dependencies:** F、G（复用 A–E）；I 验收完整链路。
+- **Dependencies:** F6、G（复用 A–E）；I 验收完整链路。
 - **Scope:** tokenizer adapter/identity、完整序列化输出计量、上下文 budget 与可配置外部预留；依赖一致的 selection、snippet 安全裁剪、include/exclude reason；Task 与 Review/Change 共享的 versioned Context Pack envelope。
 - **Non-goals:** Agent/LLM invocation、ReviewFinding、最终评论、UT 生成、为了压缩而改写源码或丢失 provenance。
 - **Deliverables:** selector、serializer、Context Pack v1 稳定 schema/spec、Task/Change 示例与 end-to-end 入口。本 milestone 完成时冻结 schema，后续破坏性修改必须显式升级版本。
@@ -219,11 +284,11 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 - **Status:** Not Started
 - **Goal:** 对整个 P3 链路建立可重现真实基线，并对照 phase-map DoD 收尾。
-- **Dependencies:** A–H 全部完成，人工 expected 已在执行前冻结。
-- **Scope:** 复用各 milestone annotations，整合 Task/Change、snapshot/refresh、retrieval/expansion/ranking/selection 的真实 suite、指标、失败分类和报告入口；记录局限及分阶段成本。
+- **Dependencies:** A–H 与 F1–F6 全部完成，人工 expected 已在执行前冻结。
+- **Scope:** 复用各 milestone annotations，整合 Task/Change、incremental snapshot/refresh、retrieval/expansion/ranking/selection 的真实 suite、指标、失败分类和报告入口；记录局限及分阶段成本。
 - **Non-goals:** 修改 P2 frozen expected/算法、追求全部 P2 traces complete、P4 agent 或 P5 review/repair benchmark、P6 全面 ablation。
 - **Deliverables:** 独立 P3 revision-bound dataset/fixtures、evaluation command、`docs/evaluation/p3-context-baseline.md`、DoD 对照及简洁 completion evidence；runtime report 不入 Git。
-- **Acceptance Criteria:** 下方最小真实覆盖与指标全部可复现；无 provenance/snapshot/budget/expected-conformance 回归；known missing 能力单列且不得伪装恢复；所有必需测试和用户显式触发的真实/strict full 验证通过；对照 phase-map P3 DoD 1–11 给出证据后才将 Phase 标 Completed 并归档。
+- **Acceptance Criteria:** 下方最小真实覆盖与指标全部可复现；无 provenance/snapshot/budget/expected-conformance 回归；known missing 能力单列且不得伪装恢复；所有必需测试和用户显式触发的真实/strict full 验证通过；对照 phase-map P3 DoD 1–13 给出证据后才将 Phase 标 Completed 并归档。
 - **Tests / real validation:** metric arithmetic/empty denominators/失败分类 tests；用户显式执行真实 P3 suite、refresh integration 与 strict full；revision/anchor 不一致为 setup failure，不能 skip 后宣称通过。
 - **Known Limitations:** 首个 baseline 只承诺标注范围内质量；P2 局限、P1 空 test mapping 与未支持语义关系仍可能影响上下文。
 
@@ -259,6 +324,9 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 - **Missing Dependency Rate:** 未进入最终 Pack 的 required dependency / 全部人工 required dependency。另分列 upstream unavailable、retrieval miss、expansion bound、ranking/selection exclusion，主指标保留全部 required 分母；不能因为 P2 已知缺失就从主分母移除。
 - **Context Token Cost:** H 最终序列化 Pack 的实际 token 数，记录 tokenizer/version、预算与预留；召回量、构建耗时和 token 成本独立报告。
 - **Snapshot Freshness Correctness:** revision/status 转移及 failure cases 上的预期状态符合率；任何 mixed/failed/unknown 被误报 fresh 为硬失败。
+- **Incremental Refresh Efficiency:** changed files、affected TU ratio、reused/rebuilt semantic/graph shards、stage latency；效率指标不覆盖 correctness。
+- **Incremental-vs-Full Conformance:** 同一最终 revision/config 下 incremental 与 full rebuild 的规范化 P1/P2 facts 差异；unsupported/unknown 必须分类，stale leftover 或 missing supported fact 为硬失败。
+- **Snapshot-bound Query Latency:** 固定 query suite 在 snapshot visibility 下的延迟/结果一致性；不得随 shard 数量通过线性扫描退化。
 - **Provenance / uncertainty:** source/revision/identity/hash 可追溯率，ambiguity/gap/truncation 保留情况，新增无证据 relation 数；无证据关系、身份错误或静默丢失重要 uncertainty 为硬失败。
 - 非适用维度报告 N/A，不当作 0 或 1；空 gold/empty output 的分母规则在 evaluation spec 中冻结，并同时报告 case 数与分母。按 case/component/Task-vs-Change 分解，再给 macro aggregate，不能用成功 case 隐藏失败。
 
@@ -266,9 +334,9 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 
 ### Validation discipline
 
-遵循当前 AGENTS.md：开发时新增/更新行为测试，但 Codex 不主动执行测试命令；trusted Stop Hook 仅运行工作树新增/修改的 `test_*.py`。Hook 不可用或未 trusted 必须报告未验证，不手动补跑。任何本计划列出的真实 ArkUI smoke/baseline、全仓 refresh 验收、strict full 和昂贵验证均由用户显式触发；未执行的必需项保留待验收，不能提前将 milestone 设 Completed。
+遵循当前 AGENTS.md：开发时新增/更新行为测试，但 Codex 不主动执行测试命令；trusted Stop Hook 仅运行工作树新增/修改的 `test_*.py`。Hook 不可用或未 trusted 必须报告未验证，不手动补跑。任何本计划列出的真实 ArkUI smoke/baseline、全仓 refresh、incremental-vs-full 大范围对照、strict full 和昂贵验证均由用户显式触发；未执行的必需项保留待验收，不能提前将 milestone 设 Completed。
 
-开发 session 不主动运行测试或 P2 baseline，等待本次 trusted Stop Hook 的 targeted 结果；不导出 patch、逐命令日志或新的 runtime snapshot。
+本 session 仅做文档整理与 `git diff --check`，不运行 P2 baseline 或 P3 测试。既有工作树产品代码、测试、Hook 修改和 frozen expected 全部保留；不导出 patch、逐命令日志或新的 runtime snapshot。
 
 ## P3 Definition of Done traceability
 
@@ -279,13 +347,15 @@ F 复用 P1 scanner/provider/test discovery/index 和 P2 projection → role map
 | 3 shared retrieval channels | C1、C2、D；I（unsupported 明示） |
 | 4 retrieval / final context separation + budget | C1、E、G、H；I |
 | 5 source traceability and inclusion/exclusion | B、C1–E、G、H；I |
-| 6 snapshot / freshness | B、F；I |
-| 7 manual + scheduler-invokable refresh | F；I |
-| 8 refresh failure cannot publish partial fresh | B、F；I |
-| 9 Pack snapshot identity | B、H；I |
-| 10 context metrics | C1–H 持续标注/验证；I 汇总 |
-| 11 bounded graph/source context | C1、D、E、H；I |
+| 6 snapshot/generation/session freshness | B、F5、F6；I |
+| 7 manual + scheduler-invokable refresh / NO_OP | F6；I |
+| 8 dependency impact + affected-TU P1 incremental | F1–F3；I |
+| 9 P1 delta → P2 incremental / safe fallback | F4、F6；I |
+| 10 failure-safe atomic publish + last usable | B、F5、F6；I |
+| 11 Pack snapshot identity + indexed query view | B、C1、F5、H；I |
+| 12 context + incremental lifecycle metrics | C1–H、F1–F6；I 汇总 |
+| 13 bounded graph/source context | C1、D、E、H；I |
 
-## Current session: P3-E only
+## No further execution under this plan
 
-E 修复后 Hook 与已规划真实 smoke 均通过，用户授权的 evidence gold 已冻结，AC 复核无新缺口，P3-E Completed。本次只更新收尾文档，不重跑测试/smoke/strict full。P3 Phase 保持 In Progress，F/G/H/I 保持 Not Started，不自动进入后续 milestone。
+不得继续执行 P3-F1～F6/G/H/I，也不得由本计划启动 P4/P5。P3-A～E 的已完成 contract 不重做；旧实现若对新产品有价值，只能由 R0–R6 的新 active plan 在不修改 frozen semantics 的前提下显式复用。

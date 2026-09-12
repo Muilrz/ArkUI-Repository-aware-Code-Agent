@@ -1,685 +1,320 @@
 # Development Phase Map
 
-## 1. Purpose
+## 1. Purpose and authority
 
-本文档定义 **ArkUI Repository-aware Code Agent** 的工程开发 Phase、阶段边界、入口/出口能力与 Definition of Done。
+本文把 [Technical Roadmap](../architecture/technical-roadmap.md) 转换为可验收的工程阶段。Roadmap 决定长期架构，本文件决定 Phase 边界和 Definition of Done，`active/` execution plan 决定当前 milestone 范围。
 
-长期架构与技术方向以：
+P0/P1/P2 是已完成历史阶段；P3-A～E 是已完成历史能力。未完成的 P3 后续、P4 Agent Runtime 和旧 P5 Engineering Capabilities 路线已由 [ADR-0005](../decisions/ADR-0005-code-review-service-pivot.md) 取代。新产品阶段使用独立 R0–R6 编号，避免把新路线伪装成旧 Phase 已完成内容。
 
-- `docs/architecture/technical-roadmap.md`
+## 2. Global principles
 
-为 source of truth。
+### 2.1 Service-first product boundary
 
-本文档不替代技术路线，而是把 Repository Intelligence、ArkUI Code Graph、Repository Knowledge Lifecycle、Task / Change Retrieval & Context Builder、Agent Runtime、Engineering Capabilities 和 Evaluation 转换为可执行的工程阶段。
+Code Review Service 自己拥有 GitCode integration、scheduler、review users、revision dedup、job lifecycle、review execution 和 result persistence。系统不建设 generic Agent Runtime。
 
-开发遵循三层结构：
+### 2.2 Provider-based knowledge
 
-```text
-Phase
-  ↓
-Milestone
-  ↓
-Codex Task
-```
+Repository Knowledge Service 由 `DocsKbProvider`、`LiveSourceProvider`、`P1Provider` 和 `P2Provider` 组成。Live Source 对当前 PR revision 的源码事实具有最终权威；P1/P2 是可复用增强，不是 availability gate。
 
-- **Phase**：具有明确系统能力边界的一段开发阶段。
-- **Milestone**：可以独立实现、独立测试、独立验收的一块能力。
-- **Codex Task**：对一个 milestone 或其子任务的具体实现指令。
+### 2.3 Provider-level freshness
 
-除非确有必要，不给 Codex 下“完成整个 Phase”的大任务。
+Freshness 分 provider 报告。P1/P2 stale 时刷新或排除，Review 可以降级为 Docs + Live Source。公共架构不要求统一 KnowledgeSnapshot、generation、semantic shard 或 incremental lifecycle。
 
-## 2. Global Principles
+### 2.4 Stable service contracts
 
-### 2.1 Repository Intelligence First
+最小 review identity 是 `repository + pr_id + head_sha + review_policy_version`。Review input、ReviewContextPack、ReviewFinding、job/result state 和 MCP tools 均使用平台无关 model；GitCode schema 隔离在 provider。
 
-P1 Repository Intelligence 是后续系统的底层基础设施，不依赖 LLM。
+### 2.5 MCP/Skill boundary
 
-后续 Code Graph、Task/Change Context Builder 和 Agent Runtime 必须建立在稳定的 repository facts 之上，而不是通过 Prompt 临时猜测代码关系。
+MCP 是 Service application API 的标准接口层。Skill 只描述外部 Agent 如何组合 MCP tools。Scheduler、polling、filter、dedup、knowledge update 和 persistence 不进入 Skill。
 
-### 2.2 Separate Generic Code Facts from ArkUI Domain Knowledge
+### 2.6 Preserve historical facts
 
-P1 负责通用 repository / C++ facts 与受控文本检索能力，例如：
+P1/P2 completed plan、spec、baseline、frozen fixture 和 P3-A～E 已实现 contract 不因新架构重写。Architecture 说明未来消费方式，spec 说明当前代码事实。
 
-- text match
-- symbol
-- declaration
-- definition
-- reference
-- caller
-- callee
-- inheritance
-- override
-- test fixture
-- test case
+### 2.7 Evaluation starts early
 
-P2 才负责把这些事实解释成 ArkUI framework relation，例如：
+每个 R phase 都增加与其行为对应的测试和 evaluation evidence；R6 汇总成正式 benchmark、ablation 与 hardening。No-Issue cases、false positive、revision provenance 和 degradation 必须从 Review Engine 初期纳入。
 
-- Bridge
-- Model
-- Pattern
-- LayoutProperty
-- PaintProperty
-- LayoutAlgorithm
-- OverlayManager
-- CREATE
-- UPDATE_PROPERTY
-- MEASURE
-- LAYOUT
-- SHOW
-- CLOSE
+## 3. Historical phases
 
-### 2.3 Version Repository Knowledge
+| Phase | Status | Continuing role |
+| --- | --- | --- |
+| P0 — Engineering Foundation | Completed | 工程、配置、测试和可观测基础可复用 |
+| P1 — Repository Intelligence | Completed | 通过 `P1Provider` 提供 symbol/definition/reference/caller/callee/tests |
+| P2 — ArkUI Code Graph | Completed | 通过 `P2Provider` 提供 ArkUI-specific semantic relations |
+| P3-A～E — Task / Change Context contracts | Completed milestones in a superseded phase | 已实现 contract 保留，可由新路线选择性复用 |
+| P3 remaining route | Superseded | 不继续 P3-F incremental lifecycle/G/H/I |
+| P4/P5 old route | Superseded before execution | 不建设 Agent Runtime，不推进旧 Agent/UT capability 路线 |
 
-Repository-derived persistent knowledge 沉淀在 index、graph、metadata 和 Knowledge Snapshot 中，而不是长期 LLM memory。
+P3 历史状态详见 [`superseded/P3-task-change-context.md`](superseded/P3-task-change-context.md)。`Superseded` 不表示整个 P3 Completed，也不否定 A～E 的完成事实。
 
-P3 建立 snapshot/freshness/refresh orchestration 边界；第一版允许 revision 变化后全量 rebuild。
-
-### 2.4 Treat Task and Change as Peer Inputs
-
-P3 同时支持自然语言 Task 与平台无关的 PR/Commit/Diff Change。GitCode 私有 schema 不进入 P3。
-
-### 2.5 Separate Retrieval from Agent Behavior
-
-P3 必须能够在没有 Agent 自主循环的情况下生成高质量 Task/Change Context Pack。
-
-P4 才负责：
-
-```text
-Planning
-→ Skill / Tool Selection
-→ Tool Call
-→ Observation
-→ State Update
-→ Re-plan
-```
-
-### 2.6 Separate Runtime from Engineering Capability
-
-P4 负责通用 Agent Runtime；P5 实现 Code Review、UT Development / Repair 等具体 Engineering workflow。
-
-P5 capability 不得各自复制 P1-P4 基础设施。
-
-### 2.7 Separate Skill, Tool and Provider
-
-- Skill 描述工程任务策略；
-- Tool 执行受控动作；
-- Provider/Adapter 隔离 clangd、GitCode 等外部系统私有协议。
-
-长期 polling、平台事件和 Repository Knowledge 持久化不隐藏在 Skill Prompt 中。
-
-### 2.8 Evaluation Starts Early
-
-Evaluation 不是 P6 才开始。
-
-- P1：Retrieval metrics
-- P2：Graph / Trace metrics
-- P3：Knowledge / Context metrics
-- P4：Agent runtime metrics
-- P5：Code Review + Coding / Repair metrics
-
-P6 负责正式 benchmark、ablation comparison、稳定性验证与 hardening。
-
-# 3. P0 — Engineering Foundation
+# 4. R0 — Review Service Foundation
 
 ## Goal
 
-建立后续 Repository Intelligence 可以安全复用的工程基础。
-
-P0 只回答：
-
-> 项目如何稳定运行，以及如何安全地接入一个外部 target repository？
-
-P0 不理解 C++ symbol，也不理解 ArkUI framework。
+建立平台无关、可测试的 Code Review Service 基础边界，使后续 GitCode、Knowledge、Review Engine 和 MCP 能在稳定 domain/application ports 上独立演进。
 
 ## In Scope
 
-- Python project/package baseline
-- repository workspace
-- repository configuration
-- external target repository path
-- read-only boundary
-- temporary repository fixtures
-- basic test execution convention
-- runtime/generated-data directory convention
+- review package/module dependency direction；
+- `ReviewIdentity` 最小字段与 canonical equality/serialization；
+- 平台无关的 ReviewRequest、ReviewJob、ReviewResult、ReviewFinding 基础 model；
+- severity `Critical/High/Medium/Low` 与 finding 必填字段边界；
+- Review Job Manager、Result Store、KnowledgeGateway、ReviewEngine 的 ports；
+- service configuration/loading boundary；
+- deterministic lifecycle/error taxonomy、logging/trace correlation 基础；
+- unit-level contract tests and fixtures。
 
 ## Out of Scope
 
-- repository recursive scanner
-- C/C++ file discovery
-- Symbol model
-- Clang / clangd
-- Symbol Index
-- Definition / Reference / Caller
-- ArkUI architecture
-- Agent
-- Build / UT repair
+- GitCode API/credentials/HTTP；
+- real PR polling、author filtering 和 durable revision dedup；
+- provider implementation 或 knowledge refresh；
+- review reasoning/LLM/category detection；
+- MCP tools、auto review 和 Skill；
+- 修改 P1/P2/P3 frozen semantics。
 
 ## Definition of Done
 
-P0 完成时：
+1. Domain model 不引用 GitCode 私有 schema、MCP transport 或具体 storage。
+2. `ReviewIdentity` 明确包含 `repository + pr_id + head_sha + review_policy_version`，具有确定 serialization/equality。
+3. ReviewFinding model 至少包含 file、location/range、category、severity、title、description、evidence、reasoning、suggestion、confidence，severity 仅允许四级枚举。
+4. Job/result/knowledge/engine ports 的职责、dependency direction 和失败类型由 spec 与 tests 固定。
+5. Service 可以用 test doubles 走通一个不含真实 GitCode/knowledge/reasoning 的 application orchestration contract，且不伪装后续能力已实现。
+6. 配置和 trace/correlation 基础不承载 secrets 或平台私有逻辑。
+7. 对应 tests 通过，active plan Acceptance Criteria 满足后才标记 Completed。
 
-1. 可以通过显式配置打开一个外部 repository。
-2. 不依赖开发者本地硬编码路径。
-3. target repository 默认只读。
-4. repository path boundary 明确，不允许无意逃逸 root。
-5. automated tests 可以使用 temporary repository fixture。
-6. 项目基础测试命令稳定可执行。
-7. 后续模块无需重复实现 workspace/config。
-8. P0 不包含 ArkUI 或 C++ 业务逻辑。
-
-## Milestones
-
-- `P0-A` — Repository Workspace & Configuration
-- `P0-B` — Test / Fixture Foundation
-
-# 4. P1 — Repository Intelligence
+# 5. R1 — GitCode Integration & Review State
 
 ## Goal
 
-建立不依赖 LLM 的结构化代码认知能力。
-
-P1 主要回答：
-
-> repository 中哪些位置匹配给定文本，以及给定一个 C++ symbol，它是什么、在哪里、谁引用/调用它、相关测试在哪里？
+可靠地把 GitCode PR/revision 转换为平台无关 review work，并持久化 review identity/state，防止同一 head/policy 重复处理。
 
 ## In Scope
 
-- repository scanner
-- repository text search
-- exact / regex text lookup
-- path / file filtering
-- File / Symbol data model
-- C++ semantic provider abstraction
-- Clang/clangd semantic backend
-- Symbol Index
-- declaration lookup
-- definition lookup
-- reference lookup
-- caller / callee lookup
-- inheritance / override 等基础语义关系
-- Test Fixture / Test Case index
-- 基础 test mapping
-- 真实 ArkUI repository validation
-- 初始 retrieval evaluation
+- `GitCodeProvider` read adapter；
+- PR metadata、author、base/head SHA、diff、changed files/hunks normalization；
+- authentication/configuration、pagination、bounded retry/error mapping；
+- review users set/get application APIs；
+- `repository + pr_id + head_sha + review_policy_version` dedup；
+- job/result durable state needed for claim/retry/restart；
+- manual `review_pr` ingestion path without Review Engine implementation。
 
 ## Out of Scope
 
-- ArkUI domain-aware trace
-- Property Update Trace
-- Measure / Layout Trace
-- Overlay Trace
-- Task/Change Context ranking
-- Token Budget
-- Agent planning loop
-- Code Host integration
-- Code editing
-- Build / UT repair
+- Repository Knowledge providers；
+- LLM/review reasoning；
+- MCP transport；
+- background scheduler/auto review；
+- GitCode comment publishing unless separately planned later。
 
 ## Definition of Done
 
-在真实 ArkUI Ace Engine repository 上，对选定的一组代表性 repository queries 与 symbols，系统可以稳定执行：
+1. GitCode-specific fields/errors stop at adapter boundary。
+2. PR input produces deterministic platform-neutral change model with exact head SHA and hunks。
+3. User filter is configurable and evaluated before expensive downstream work。
+4. Same review identity is not double-claimed across retry/restart/concurrent submission；new head or policy is distinct。
+5. State transitions and failed/retry behavior are queryable and covered by tests。
+6. Provider failure never creates a false successful review record。
+7. Credential/secret handling and redaction meet documented safety contract。
 
-```text
-text_search
-search_symbol
-find_declaration
-find_definition
-find_references
-find_callers
-find_callees
-find_tests
-```
-
-并满足：
-
-1. Repository Intelligence 不依赖 LLM。
-2. retrieval API 不与具体 Clang/clangd 实现强耦合。
-3. Index 可以重新构建。
-4. Index 和数据库属于派生数据，不进入 Git。
-5. namespace、class member、overload 等 C++ 语义不能只通过关键词猜测。
-6. Test Fixture / Test Case 可以作为一等实体查询。
-7. 至少在多个真实 ArkUI 组件上完成 integration validation。
-8. 有基础 retrieval benchmark 和错误分析。
-9. 文本检索受 repository boundary 约束，结果可追溯到 source location，且不用于替代 C++ semantic resolution。
-
-## Milestones
-
-- `P1-A` — Repository Scanner
-- `P1-B` — File / Symbol Data Model
-- `P1-C` — C++ Semantic Provider Contract
-- `P1-D` — Clang/clangd Semantic Backend
-- `P1-E` — Symbol Index
-- `P1-F` — Definition / Declaration Retrieval
-- `P1-G` — Reference + Caller / Callee Retrieval
-- `P1-H` — Test Fixture / Test Case Index
-- `P1-I` — Real ArkUI Validation & Retrieval Baseline
-- `P1-J` — Repository Text Search
-
-# 5. P2 — ArkUI Code Graph
+# 6. R2 — Repository Knowledge Service
 
 ## Goal
 
-在 P1 repository facts 之上建立 ArkUI framework-aware code relations。
-
-P2 回答：
-
-> 这些 symbol 在 ArkUI 架构上是什么关系？
+实现 provider-based KnowledgeGateway，为目标 review revision 构建可追溯 evidence，并在 P1/P2 stale 时安全降级。
 
 ## In Scope
 
-- graph persistence/query
-- local / bounded graph traversal
-- symbol / component based graph expansion
-- component creation trace
-- property update trace
-- measure/layout trace
-- overlay trace
-- optional lifecycle trace（需独立 milestone；不属于当前 P2 Definition of Done）
+- common provider capability/evidence/status contract；
+- `DocsKbProvider` for docs/kb、`context_registry`、`kb_search`；
+- `LiveSourceProvider` for Git/filesystem/`rg` at explicit revision；
+- `P1Provider` adapter over existing P1；
+- `P2Provider` adapter over existing P2；
+- provider-level freshness、status diagnostics；
+- update/rebuild/status application APIs；
+- KnowledgeGateway query, normalization, provenance, budget and degradation；
+- Docs + Live Source minimum review context path。
 
 ## Out of Scope
 
-- Task/Change Context ranking
-- Token Budget
-- Knowledge refresh orchestration
-- GitCode integration
-- Agent planning
-- Code editing
-- Build / Repair
+- unified KnowledgeSnapshot/generation requirement；
+- mandatory dependency-driven incremental knowledge、TU invalidation、shard/ownership/P1 delta/P2 incremental projection；
+- changing P1/P2 semantics or baseline；
+- `SemanticMcpProvider` dependency；
+- Review Engine reasoning or MCP transport。
 
 ## Definition of Done
 
-至少对代表性 ArkUI components，可以从真实代码中恢复并验证：
+1. 四个 provider 通过统一 capability/status/evidence boundary 调用，同时保留各自 source/revision/version。
+2. Live Source 对目标 head revision 可验证读取，并裁决当前源码事实冲突。
+3. Status 至少区分 ready/stale/unavailable/refreshing/error，按 provider 返回而非统一 snapshot gate。
+4. P1/P2 stale facts 不会作为当前确定 evidence；refresh 或 exclusion/degradation 可审计。
+5. P1/P2 unavailable 时 Docs + Live Source path 仍可返回有界 context；Live Source 目标 revision 不可用时明确失败。
+6. `update_repo_knowledge`、`rebuild_repo_knowledge`、`get_knowledge_status` application contract 已实现并测试。
+7. P1/P2 frozen tests/baseline 不因 adapter 改写。
 
-- Component Creation
-- Property Update
-- Measure / Layout
-- Overlay Show / Close
-
-并满足：
-
-1. graph node/edge 可以追溯到 P1 symbol/source location；
-2. generic edge 与 ArkUI domain edge 可区分；
-3. 关键 domain edge 有 provenance；
-4. 支持从 symbol/component 做局部 graph expansion；
-5. 不需要把整张 graph 塞入 LLM；
-6. 有人工标注的小规模 trace baseline；
-7. 可以计算初始 Call Chain Accuracy。
-
-当前 P2 execution plan 按既有 scope 收尾，不因为未来 Code Review 需求新增 GitCode、polling、ReviewFinding 或 Context Builder 工作。
-
-# 6. P3 — Task / Change Retrieval & Context Builder
+# 7. R3 — Review Engine
 
 ## Goal
 
-把 repository 中的大量事实压缩成与当前开发 Task 或代码 Change 直接相关的、版本可追溯的上下文。
-
-P3 回答：
-
-> 面对一个 Task 或 PR/Commit/Diff Change，后续 Agent 真正需要看到哪些代码和关系？当前上下文基于哪个 knowledge snapshot？
+从标准化 change 与 Repository Knowledge evidence 构建 `ReviewContextPack`，产生少而准确、可定位、可解释的结构化 findings。
 
 ## In Scope
 
-- KnowledgeSnapshot / repository revision identity
-- freshness state 与 refresh result
-- manual refresh entry point
-- scheduler-invokable refresh entry point
-- 基于已有 P1/P2 能力的 refresh/rebuild orchestration
-- Task schema / parser
-- platform-neutral Change schema
-- changed file/hunk/range → changed symbol mapping
-- Text / Symbol / Reference / Test Retrieval
-- task/change-driven Graph Expansion
-- Task / Change Subgraph Extraction
-- candidate ranking / context tiering
-- Token Budget
-- Task Context Pack
-- Review/Change Context Pack
-- retrieval/context evaluation
+- ReviewContextPack assembly、ranking、budget、gaps 与 provider provenance；
+- fixed review policy/version；
+- Stability category；
+- Memory / Resource / Lifetime category；
+- Functional Correctness category；
+- ReviewFinding parsing/validation/normalization；
+- zero-finding success；
+- evidence/revision/category/severity/location validation；
+- initial review benchmark including No-Issue cases。
 
 ## Out of Scope
 
-- autonomous planning loop
-- Skill/Tool runtime
-- long-running PR polling
-- GitCode authentication/API adapter
-- review comment publishing
-- code editing
-- build
-- repair
+- generic Agent Runtime or arbitrary skill execution；
+- source edits、UT generation、build/test/repair；
+- auto polling；
+- MCP transport；
+- mandatory P2 evidence；
+- automatic GitCode comment publishing。
 
 ## Definition of Done
 
-1. 给定自然语言/结构化 Task，可以生成结构化 Task Context Pack。
-2. 给定平台无关的 Change，可以保留 base/head revision、changed file/hunk/range provenance，并在可证明时解析 changed symbol。
-3. Task/Change 均可组合 Text/Symbol/Reference/Test/Graph retrieval。
-4. candidate retrieval 与 final context 分离，并有明确 Token Budget。
-5. 每个 snippet/relation 可追溯来源，并能解释为何被选入或排除。
-6. 可以读取 KnowledgeSnapshot identity/status 并判断 freshness。
-7. 支持显式 manual refresh，并允许 scheduler 调用同一 refresh entry point。
-8. refresh 失败时不把 partial data 静默标记为 fresh。
-9. Context Pack 记录 KnowledgeSnapshot identity。
-10. 可以评估 Relevant Context Ratio、Missing Dependency Rate、Context Token Cost。
-11. 不把整个 repository graph 或全仓代码直接塞入 LLM。
+1. Engine 只依赖 platform-neutral request/context，不直接调用 GitCode/storage/provider internals。
+2. ContextPack 包含 change、provider status/revision、included evidence、gaps/degradation 和 budget。
+3. 三个首批 category 有明确 policy、prompt/model boundary（若使用模型）、output validation 和 tests。
+4. Finding 含 R0 固定必填字段和四级 severity，关键 claim 可追溯到目标 revision evidence。
+5. Invalid/unlocated/unsupported findings 被拒绝或显式降级，不静默发布。
+6. No-Issue cases 可成功返回 zero findings，benchmark 报告 false positives。
+7. Docs + Live Source 与增加 P1/P2 的初始 ablation 可复现。
 
-# 7. P4 — Agent Runtime
+# 8. R4 — MCP Server
 
 ## Goal
 
-让 LLM 基于 P1-P3 的共享能力执行多轮 repository-aware source analysis，并建立可供不同 Engineering Capabilities 复用的 Skill/Tool runtime。
-
-P4 回答：
-
-> Agent 如何计划、选择 Skill/Tool、处理 Observation、更新状态并结束任务，而不把 Code Review 或 UT workflow 写死进 runtime？
+以稳定、安全的 MCP tools 暴露已有 Code Review Service 和 Repository Knowledge Service application APIs，不复制业务逻辑。
 
 ## In Scope
 
-- tool contract / registry / executor
-- skill contract / registry / invocation
-- planner
-- agent state
-- observation / state update
-- re-plan / retry
-- stop condition / iteration limit
-- execution trace
-- knowledge/context tool integration
-- read-only source analysis agent
+- `review_pr`、`review_diff`、`get_review_result`；
+- `update_repo_knowledge`、`rebuild_repo_knowledge`、`get_knowledge_status`；
+- `set_review_users`、`get_review_users`；
+- `start_auto_review`、`stop_auto_review`、`get_review_status` 的 transport contract（调用 R5 前可明确 unsupported/not enabled）；
+- schema/versioning、authentication/authorization、input limits、error mapping；
+- MCP integration/contract tests and usage documentation。
 
 ## Out of Scope
 
-- long-running GitCode polling
-- GitCode review publishing
-- arbitrary source editing
-- ArkUI build pipeline
-- UT repair loop
+- Agent planning/state/memory；
+- review reasoning duplication；
+- scheduler implementation；
+- Skill；
+- platform-specific data leakage。
 
 ## Definition of Done
 
-Agent 可以：
+1. 所有规划 tools 有明确 schema、sync/async/result identity、错误和权限 contract。
+2. MCP handler 只调用 application APIs，无 Review Engine/Knowledge/GitCode 业务逻辑复制。
+3. Invalid/oversized/unauthorized input 有稳定、无 secret 泄漏的失败响应。
+4. ReviewFinding 和 provider freshness/degradation 可无损序列化。
+5. Auto-review tools 在 R5 未启用时返回显式 capability status，不伪装成功。
+6. MCP contract/integration tests 通过，外部 client 可完成 manual review/result/status workflow。
 
-1. 接收开发/分析 Task 或结构化 Change context；
-2. 生成和维护 Current Plan；
-3. 根据状态选择受控 Tool/Skill；
-4. 使用 P1/P2/P3，而不是绕过基础设施做无边界搜索；
-5. 处理 Observation 并 Re-plan；
-6. 触发明确 Stop Condition 并防止无限循环；
-7. 处理 invalid tool/skill call；
-8. 记录 Task/Change、Plan、Skill、Tool、Observation、Context、Snapshot identity、Iteration、Token Cost、Latency；
-9. 在 read-only Source Analysis benchmark 上稳定完成任务；
-10. runtime 不依赖 GitCode 私有 API，也不依赖 UT-only state machine。
-
-# 8. P5 — Engineering Capabilities
+# 9. R5 — Auto Review & Code Review Skill
 
 ## Goal
 
-在 P1-P4 的共享 Repository-aware 基础设施上实现真实工程能力。
+交付 Service-owned 的可靠自动 review，以及只组合 MCP tools 的可移植 Code Review Skill。
 
-第一批能力：
+## In Scope
 
-```text
-P5 Engineering Capabilities
-├─ Code Review
-└─ UT Development & Repair
-```
+- PR Poller / Scheduler lifecycle；
+- GitCodeProvider → user filter → head/policy dedup → job → persist flow；
+- configurable interval、start/stop/status；
+- restart/retry/backoff、overlap control、operational diagnostics；
+- Code Review Skill instructions for MCP-capable Agents；
+- skill validation against Codex/Claude-style clients where available。
 
-## Code Review — In Scope
+## Out of Scope
 
-- CodeHostProvider abstraction / GitCodeProvider
-- PR/change ingestion
-- configurable polling watcher（可表达每 10 分钟等周期）
-- PR author username filter
-- base/head revision tracking 与 deduplication
-- manual re-review entry
-- knowledge freshness gate
-- P3 Review Context
-- Code Review Skill
-- Stability / Memory-Lifetime / Functional / Test Impact review
-- structured ReviewFinding
-- review summary / inline comment publishing
-- duplicate finding/comment suppression
-- review execution trace
-
-## Code Review — Definition of Done
-
-对配置命中的受控/真实 GitCode PR review task，系统能够：
-
-```text
-Poll / Manual Trigger
-→ Discover PR
-→ Author Filter
-→ Head Revision Dedup
-→ Read Change
-→ Ensure Knowledge Freshness
-→ Build Review Context
-→ Review
-→ Produce 0..N Findings
-→ Publish / Record Result
-```
-
-并满足：
-
-1. polling interval 可配置；
-2. 可按 PR author username 筛选；
-3. 同一 PR 同一 head revision 不因轮询重复检视/评论，新 revision 可触发新 review；
-4. GitCode 私有 schema 被 provider 隔离；
-5. Review 使用 P1/P2/P3 supporting context，而不是 diff-only Prompt；
-6. finding 有 source location、category、severity/confidence、evidence/provenance；
-7. 至少支持 Stability、Memory/Lifetime、Functional、Test Impact；
-8. 支持 zero findings；
-9. stale/failed knowledge 不伪装成 fresh；
-10. publish failure 可追踪并避免无限重复 spam；
-11. evaluation 包含 No-Issue case。
-
-## UT Development & Repair — In Scope
-
-- Test Mapping
-- Fixture / Similar Test / Mock Retrieval
-- Coverage Gap / Test Intent
-- UT Generation
-- patch application
-- minimal build / test target
-- error parsing / failure classification
-- root cause retrieval
-- repair loop
-- end-to-end UT workflow
-
-## UT Development & Repair — Definition of Done
-
-对 benchmark UT task，Agent 可以完成：
-
-```text
-Task
-→ Target Retrieval
-→ Existing Fixture
-→ Similar Test
-→ Mock Dependency
-→ UT Patch
-→ Compile
-→ Minimal Test
-→ Failure Classification
-→ Root Cause Retrieval
-→ Repair
-→ Re-run
-```
-
-并记录 Compile Pass Rate、UT Pass Rate、Task Success Rate、Repair Success Rate、Average Iterations、Tool Calls、Token Cost、Latency。
-
-## Shared Rules
-
-- Code Review 与 UT 是 sibling capabilities，共享 P1/P2/P3/P4。
-- Code Review 可以产生 Test Gap finding，后续交给 UT capability。
-- P5 具体 milestone 接近开发时再拆入 `docs/exec-plans/active/`，当前 P2 不提前实现。
-
-# 9. P6 — Evaluation & Hardening
-
-## Goal
-
-形成正式 benchmark、ablation comparison、稳定性验证和系统 hardening。
-
-P6 不负责首次建立评价体系，而是整合并完善 P1-P5 已持续建设的 evaluation。
-
-## Benchmark Coverage
-
-优先选择典型 ArkUI components：
-
-- Button
-- Text
-- Menu
-- Dialog
-- Tabs
-- List
-
-任务至少覆盖：
-
-- Component Creation
-- Property Trace
-- Layout Trace
-- Source Analysis
-- Task / Change Context
-- Code Review Stability
-- Code Review Memory/Lifetime
-- Code Review Functional Correctness
-- Code Review Test Impact
-- Code Review No-Issue case
-- UT Generation
-- UT Repair
-
-## Metrics
-
-### Retrieval
-
-- Recall@K
-- MRR
-- Target File Recall
-- Target Symbol Recall
-- Call Chain Accuracy
-
-### Knowledge / Context
-
-- Snapshot Freshness Correctness
-- Relevant Context Ratio
-- Missing Dependency Rate
-- Context Token Cost
-
-### Agent
-
-- Tool Success Rate
-- Invalid Tool Call Rate
-- Invalid Skill Call Rate
-- Average Tool Calls
-- Average Iterations
-
-### Code Review
-
-- Finding Precision
-- Finding Recall
-- False Positive Rate
-- Category Accuracy
-- Severity Accuracy
-- Evidence / Provenance Validity
-- Duplicate Comment Rate
-- Review Latency
-
-### Coding
-
-- Compile Pass Rate
-- UT Pass Rate
-- Task Success Rate
-- Repair Success Rate
-
-### Cost
-
-- Token Usage
-- Latency
-- Tool Call Count
-
-## Ablation
-
-通用能力比较：
-
-```text
-LLM Only
-vs
-Keyword Search
-vs
-Symbol Retrieval
-vs
-Code Graph Retrieval
-vs
-Code Graph + Agent
-```
-
-Code Review 额外比较：
-
-```text
-Diff-only LLM
-vs
-Diff + Text Retrieval
-vs
-Diff + Symbol Retrieval
-vs
-Diff + Code Graph
-vs
-Full Repository-aware Reviewer
-```
+- 在 Skill 中实现 polling/scheduler/dedup/persistence；
+- generic Agent Runtime；
+- arbitrary engineering workflow；
+- UT Development / Repair；
+- requiring an external Agent to keep Service alive。
 
 ## Definition of Done
 
-1. benchmark dataset 固化；
-2. evaluation command 可重复运行；
-3. 结果可追踪到具体 task/change/component；
-4. 失败案例可分类；
-5. 完成主要 ablation comparison；
-6. 有成本、延迟和成功率数据；
-7. Code Review benchmark 含 No-Issue cases 并统计 false positive；
-8. 对高频失败点完成 hardening；
-9. 可以明确说明 Repository Intelligence、Code Graph、Knowledge Lifecycle、Context Builder 和 Agent Runtime 各自的增益或限制。
+1. Scheduler 自动 flow 严格按 provider/filter/dedup/job/persist 边界运行。
+2. 同一 identity 在重复 tick、overlap、retry 和 restart 下不重复 review。
+3. Review users、interval、start/stop/status 可配置且状态可观测。
+4. Provider/review failure 有 bounded retry/backoff，不丢失可诊断 state。
+5. Skill 只引用 MCP public tools，不包含后台循环、平台凭据或私有存储逻辑。
+6. 禁用/停止 auto review 不删除历史 result，恢复行为由 contract 固定。
+7. End-to-end smoke 覆盖 new PR、新 head、filtered user、duplicate head、failure/recovery。
 
-# 10. Phase Dependency
+# 10. R6 — Evaluation & Hardening
+
+## Goal
+
+形成正式 Code Review benchmark、provider/engine ablation 与生产级 reliability、security、performance hardening。
+
+## In Scope
+
+- representative ArkUI PR/diff benchmark；
+- Stability、Memory/Resource/Lifetime、Functional Correctness 和 No-Issue cases；
+- finding precision/recall/FPR、category/severity/location/evidence accuracy；
+- provider freshness/degradation correctness；
+- diff-only vs Docs+Live Source vs +P1 vs +P2 ablation；
+- GitCode/MCP/scheduler/result-store resilience；
+- load/latency/cost/resource limits；
+- authz、secret redaction、input/diff abuse and prompt-injection hardening；
+- operational runbook、upgrade/recovery validation。
+
+## Out of Scope
+
+- 新的 generic Agent product；
+- 用 benchmark 驱动修改 frozen P1/P2 semantics 而无独立 scope；
+- 把 unsupported case 计作成功或只报告 aggregate；
+- 以增加评论数量替代 review quality。
+
+## Definition of Done
+
+1. Dataset、labels、revision、sampling、No-Issue coverage 和 scorer 可复现。
+2. 核心质量指标按 category/component/provider state 分解并报告置信/分母。
+3. False positive、evidence validity 和 revision alignment 达到冻结 release gate。
+4. Docs+Live Source minimum path 与 P1/P2 增益/限制通过 ablation 明确。
+5. Duplicate suppression、restart/retry、provider outage、MCP error 和 storage recovery 通过 fault tests。
+6. Security review 覆盖 credentials、authorization、untrusted PR/docs content 和 output handling。
+7. Performance/cost budgets 和 operational SLO/alerts/runbook 冻结并通过验收。
+8. Known limitations 单列，不通过 unsupported/unknown 隐藏失败。
+
+# 11. Dependency and execution rules
+
+主交付顺序：
 
 ```text
-P0 Engineering Foundation
-        ↓
-P1 Repository Intelligence
-        ↓
-P2 ArkUI Code Graph
-        ↓
-P3 Task / Change Retrieval & Context Builder
-        ↓
-P4 Agent Runtime
-        ↓
-P5 Engineering Capabilities
-   ├─ Code Review
-   └─ UT Development & Repair
-        ↓
-P6 Evaluation & Hardening
+P0/P1/P2 historical foundations
+               ↓
+R0 → R1 → R2 → R3 → R4 → R5 → R6
 ```
 
-这不是绝对禁止并行开发。
+这表示默认验收依赖，不禁止在清晰 port 后并行准备数据或测试，但不得把后续能力提前计入前一 Phase DoD。R4 可以先暴露 R5 control tool schema，但在 R5 完成前必须返回显式未启用状态。
 
-Evaluation fixture、benchmark 标注、文档与测试基础可以提前并行建设，但核心能力依赖必须保持：
+每个 active execution plan 必须记录：
 
-- P2 不绕过 P1 自己重新解析 repository facts；
-- P3 不绕过 P1/P2 直接依赖 LLM 猜上下文；
-- P3 Knowledge Manager 不复制 P1/P2 semantic/index/graph implementation；
-- P4 不绕过 P3 长期依赖无约束 Prompt stuffing；
-- P5 Code Review/UT 不各自复制 P1-P4 基础设施；
-- GitCode 私有协议不泄漏到 P3 retrieval 或通用 review reasoning；
-- P6 不成为唯一存在 evaluation 的阶段。
-
-# 11. Milestone Execution Rule
-
-每个 milestone execution plan 至少包含：
-
-- ID
-- Status
-- Goal
-- Scope
-- Non-goals
-- Dependencies
-- Deliverables
-- Acceptance Criteria
-- Tests / Validation
-- Known Limitations
+- Goal；
+- Status；
+- dependencies；
+- in scope / out of scope；
+- deliverables；
+- acceptance criteria；
+- validation plan；
+- risks/decisions。
 
 Status 统一使用：
 
@@ -687,16 +322,8 @@ Status 统一使用：
 - `In Progress`
 - `Blocked`
 - `Completed`
+- `Superseded`
 
-Milestone 过大时继续拆为 Codex Task：
+开始实现时只将当前 milestone 设为 `In Progress`。只有 Acceptance Criteria 与必需测试全部通过才设为 `Completed`。路线被替代但未完成时设为 `Superseded` 并移至 `superseded/`，不得伪装成完成。
 
-```text
-P1-C
-├── P1-C1
-├── P1-C2
-└── P1-C3
-```
-
-Codex 每次只执行当前明确任务，不自动进入下一个 milestone。
-
-P3-P6 的细粒度 milestone 在接近对应 Phase 开发时再进入 `docs/exec-plans/active/`；本次长期路线修订不创建新的 active plan，也不改变当前 P2 milestone 状态。
+当前 active plan 是 [`active/R0-review-service-foundation.md`](active/R0-review-service-foundation.md)，本次架构迁移不授权开始任何 R0 产品代码。

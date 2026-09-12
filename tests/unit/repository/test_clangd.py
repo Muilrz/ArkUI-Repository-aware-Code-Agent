@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import threading
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -28,6 +29,53 @@ from tests.fixtures.synthetic_cpp_repository import synthetic_cpp_repository
 
 
 class FixedScopeObservationTests(unittest.TestCase):
+    def test_large_scope_is_prepared_completely_with_bounded_documents_and_reopens(self):
+        with tempfile.TemporaryDirectory() as root:
+            paths = tuple(RepositoryFile.from_path(f"file-{i:03d}.cpp") for i in range(100))
+            for file in paths:
+                (Path(root) / file.path).write_text("int value;\n")
+            provider = object.__new__(ClangdSemanticProvider)
+            provider._workspace = RepositoryWorkspace(root)
+            provider._opened_documents = set()
+            provider._closed = False
+            opened, prepared, collected, peaks = set(), set(), [], []
+
+            class Transport:
+                def notify(inner, method, params):
+                    uri = params["textDocument"]["uri"]
+                    if method.endswith("didOpen"):
+                        opened.add(uri)
+                        peaks.append(len(opened))
+                    elif method.endswith("didClose"):
+                        opened.remove(uri)
+
+                def request(inner, method, params):
+                    uri = params["textDocument"]["uri"]
+                    self.assertIn(uri, opened)
+                    prepared.add(uri)
+                    return []
+
+            provider._transport = Transport()
+            updates = []
+            provider.set_progress_observer(lambda *event: updates.append(event))
+            def collect(items, uri, *args):
+                self.assertEqual(len(prepared), 100)
+                self.assertIn(uri, opened)
+                collected.append(uri)
+            with patch.object(provider, "_collect_document_symbols", side_effect=collect):
+                provider.symbol_observations_in_files(tuple(reversed(paths)))
+            self.assertEqual(len(set(collected)), 100)
+            self.assertEqual(collected, sorted(collected))
+            self.assertLessEqual(max(peaks), provider.MAX_OPEN_DOCUMENTS)
+            self.assertIn(("semantic_prepare", 100, 100, paths[-1].path.as_posix()), updates)
+            self.assertIn(("semantic_collect", 100, 100, paths[-1].path.as_posix()), updates)
+            first_collect = next(i for i, event in enumerate(updates) if event[0] == "semantic_collect")
+            self.assertEqual(updates[first_collect - 1][1:3], (100, 100))
+            closed_uri = next(uri for uri in collected if uri not in opened)
+            provider._request("textDocument/references", {"textDocument": {"uri": closed_uri}})
+            self.assertIn(closed_uri, opened)
+            self.assertLessEqual(len(opened), provider.MAX_OPEN_DOCUMENTS)
+
     def test_all_documents_ready_before_any_location_collection(self):
         provider = object.__new__(ClangdSemanticProvider)
         events = []
@@ -159,6 +207,7 @@ class ClangdAdapterTests(unittest.TestCase):
                     fallback_flags=("-std=c++17",),
                 )
                 self.assertTrue(provider.supports_call_hierarchy)
+                provider._opened_documents.add("file:///owned-document.cpp")
 
                 provider.close()
                 provider.close()
@@ -177,6 +226,8 @@ class ClangdAdapterTests(unittest.TestCase):
         self.assertIn(b'"method":"initialized"', written)
         self.assertIn(b'"method":"shutdown"', written)
         self.assertIn(b'"method":"exit"', written)
+        self.assertNotIn(b'"method":"textDocument/didClose"', written)
+        self.assertIsNotNone(process.poll())
         self.assertIn(b'"fallbackFlags":["-std=c++17"]', written)
 
     def test_request_timeout_aborts_unresponsive_clangd(self) -> None:

@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Muil_ArkUI-UT-Agent"
+name = "arkui-repository-aware-code-review-service"
 version = "0.1.0"
-description = "Repository-aware Code Agent for OpenHarmony ArkUI Ace Engine"
+description = "Repository-aware Code Review Service for OpenHarmony ArkUI Ace Engine"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -14,4 +14,3 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

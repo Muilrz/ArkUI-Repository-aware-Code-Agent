@@ -145,6 +145,20 @@ class RepositoryScanner:
 
         return tuple(sorted(discovered, key=lambda file: file.path.as_posix()))
 
+    @property
+    def excluded_directories(self) -> frozenset[str]:
+        """Configured directory-name policy, independent of scan observations."""
+        return self._excluded_directories
+
+    def excluded_directory(self, file: RepositoryFile) -> str | None:
+        """Return the first policy-excluded ancestor, not an inferred scan miss.
+
+        No filesystem lookup is performed. A missing/unreadable file or symlink
+        is not evidence of a directory-name exclusion.
+        """
+        return next((part for part in file.path.parts[:-1]
+                     if part.casefold() in self._excluded_directories), None)
+
     def _should_descend(self, directory: Path) -> bool:
         if directory.name.casefold() in self._excluded_directories:
             return False

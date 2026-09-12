@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import subprocess
 from dataclasses import dataclass
+from typing import Callable
 from pathlib import Path
 
 from arkui_agent.repository.workspace import RepositoryWorkspace, RepositoryWorkspaceError
@@ -75,7 +76,8 @@ class GitSourceReader:
         status = self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=none")
         return revision or None, status
 
-    def observe(self, paths: tuple[str, ...]) -> SourceObservation:
+    def observe(self, paths: tuple[str, ...], *,
+                progress: Callable[[str, int, int, str | None], None] | None = None) -> SourceObservation:
         try:
             top = Path(self._git("rev-parse", "--show-toplevel").decode("utf-8").strip()).resolve()
             if top != self.workspace.root:
@@ -86,11 +88,13 @@ class GitSourceReader:
                 tracked = ()
             files: list[FileHash] = []
             stamps: list[FileStamp] = []
-            for path in paths:
+            for current, path in enumerate(paths, 1):
                 actual = self.workspace.resolve(path)
                 checksum, file_stamp = hash_file(actual)
                 files.append(FileHash(path, checksum))
                 stamps.append(file_stamp)
+                if progress is not None:
+                    progress("source_inventory", current, len(paths), path)
             after = self._state()
             if before != after:
                 raise SourceReadError("Git revision/status changed during source observation.")

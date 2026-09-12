@@ -1,7 +1,9 @@
 # ADR-0001: Development Phase and Milestone Model
 
-- **Status:** Accepted
+- **Status:** Accepted; phase catalog amended by [ADR-0005](ADR-0005-code-review-service-pivot.md)
 - **Date:** 2026-09-01
+
+> Phase → Milestone → Codex Task 的管理模型继续有效。本文的旧 P3–P6 产品阶段目录是历史记录；当前产品阶段为 R0–R6，以 ADR-0005 和 `docs/exec-plans/phase-map.md` 为准。
 
 ## Context
 

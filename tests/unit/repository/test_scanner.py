@@ -16,6 +16,16 @@ from tests.fixtures import synthetic_cpp_repository
 
 
 class RepositoryScannerTests(unittest.TestCase):
+    def test_policy_exclusion_is_independent_of_scan_results_and_uses_configured_names(self):
+        with TemporaryDirectory() as root:
+            scanner = RepositoryScanner(RepositoryWorkspace(root))
+            self.assertEqual(scanner.excluded_directory(RepositoryFile.from_path("nested/Generated/x.cpp")), "Generated")
+            self.assertIsNone(scanner.excluded_directory(RepositoryFile.from_path("src/missing.cpp")))
+            self.assertIsNone(scanner.excluded_directory(RepositoryFile.from_path("src/generated.cpp")))
+            custom = RepositoryScanner(RepositoryWorkspace(root), excluded_directories=("custom",))
+            self.assertIsNone(custom.excluded_directory(RepositoryFile.from_path("generated/x.cpp")))
+            self.assertEqual(custom.excluded_directory(RepositoryFile.from_path("CUSTOM/x.h")), "CUSTOM")
+
     def test_recursively_scans_temporary_repository(self) -> None:
         with synthetic_cpp_repository() as repository:
             scanner = RepositoryScanner(RepositoryWorkspace(repository.root))

@@ -1,10 +1,12 @@
 """Public semantic merge regressions; no smoke gold or ArkUI checkout required."""
 from dataclasses import replace
+from itertools import permutations
 import unittest
 
 from arkui_agent.repository import (
     RepositoryFile, SourceLocation, SourceRange, Symbol, SymbolIdentity, SymbolKind,
     SymbolObservation, SymbolMergeConflict, canonicalize_symbols,
+    canonicalize_symbol_groups,
 )
 
 
@@ -14,6 +16,35 @@ def extent(path, line):
 
 
 class CanonicalSymbolMergeTests(unittest.TestCase):
+    def test_reopened_namespace_preserves_all_observations_and_is_order_independent(self):
+        identity = SymbolIdentity("namespace-n")
+        a, b, local = extent("a.h", 2), extent("b.cpp", 7), extent("c.h", 3)
+        symbol = Symbol(identity, SymbolKind.NAMESPACE, "N", "N", a, a)
+        first = SymbolObservation(symbol, local, None)
+        second = SymbolObservation(replace(symbol, declaration=b, definition=b), b, None)
+        groups = canonicalize_symbol_groups((first, second, first))
+        self.assertEqual(groups, canonicalize_symbol_groups((second, first)))
+        self.assertEqual(groups[0].symbol, symbol)
+        self.assertEqual(set(groups[0].observations), {first, second})
+        self.assertEqual(canonicalize_symbols((second, first)), (symbol,))
+        for field, value in (("kind", SymbolKind.CLASS), ("qualified_name", "Other"),
+                             ("display_name", "Other"), ("parent_identity", SymbolIdentity("wrong")),
+                             ("namespace_identity", SymbolIdentity("wrong"))):
+            original = replace(first, symbol=replace(symbol, namespace_identity=identity, parent_identity=identity))
+            base = replace(second.symbol, namespace_identity=identity, parent_identity=identity)
+            changed = replace(second, symbol=replace(base, **{field: value}))
+            for ordered in ((original, changed), (changed, original)):
+                with self.subTest(field=field), self.assertRaises(SymbolMergeConflict):
+                    canonicalize_symbol_groups(ordered)
+
+    def test_non_namespace_multiple_sites_still_conflict(self):
+        for kind in (SymbolKind.FUNCTION, SymbolKind.CLASS, SymbolKind.FIELD):
+            a, b = extent("a.cpp", 1), extent("b.cpp", 1)
+            symbol = Symbol(SymbolIdentity("same"), kind, "s", "s", a, a)
+            with self.subTest(kind=kind), self.assertRaises(SymbolMergeConflict):
+                canonicalize_symbols((SymbolObservation(symbol, a, None),
+                                      SymbolObservation(replace(symbol, declaration=b), b, None)))
+
     def setUp(self):
         self.declaration = extent("interface.any", 2)
         self.definition = extent("implementation.any", 5)
@@ -29,6 +60,44 @@ class CanonicalSymbolMergeTests(unittest.TestCase):
 
     def test_duplicate_observations_are_idempotent(self):
         self.assertEqual(canonicalize_symbols((self.header, self.source, self.header)), (self.symbol,))
+
+    def test_partial_related_observation_enriches_without_losing_evidence(self):
+        partial = SymbolObservation(replace(self.symbol, parent_identity=None, namespace_identity=None))
+        for ordered in permutations((self.header, partial)):
+            group, = canonicalize_symbol_groups(ordered)
+            self.assertEqual(group.symbol, self.symbol)
+            self.assertEqual(set(group.observations), {self.header, partial})
+        for ordered in permutations((self.header, self.source, partial)):
+            self.assertEqual(canonicalize_symbols(ordered), (self.symbol,))
+
+    def test_known_related_containment_conflicts(self):
+        for field in ("parent_identity", "namespace_identity"):
+            other = SymbolObservation(replace(self.symbol, **{field: SymbolIdentity("other")}))
+            for ordered in permutations((self.header, other)):
+                with self.subTest(field=field), self.assertRaises(SymbolMergeConflict):
+                    canonicalize_symbol_groups(ordered)
+
+    def test_complementary_partial_observations_are_order_independent(self):
+        partials = (
+            SymbolObservation(replace(self.symbol, definition=None, namespace_identity=None)),
+            SymbolObservation(replace(self.symbol, declaration=None, parent_identity=None)),
+            SymbolObservation(replace(self.symbol, parent_identity=None, namespace_identity=None)),
+        )
+        expected = canonicalize_symbol_groups(partials)
+        self.assertEqual(expected[0].symbol, self.symbol)
+        self.assertEqual(set(expected[0].observations), set(partials))
+        for ordered in permutations(partials):
+            self.assertEqual(canonicalize_symbol_groups(ordered), expected)
+
+    def test_partial_metadata_never_relaxes_names_kind_or_ranges(self):
+        for field, value in (("display_name", "different"), ("qualified_name", "Other::f"),
+                             ("kind", SymbolKind.FUNCTION), ("declaration", extent("other.h", 2)),
+                             ("definition", extent("other.cpp", 5))):
+            partial = SymbolObservation(replace(self.symbol, parent_identity=None,
+                                                namespace_identity=None, **{field: value}))
+            for ordered in permutations((self.header, partial)):
+                with self.subTest(field=field), self.assertRaises(SymbolMergeConflict):
+                    canonicalize_symbol_groups(ordered)
 
     def test_conflicting_declaration_or_definition_range_rejected(self):
         for field in ("declaration", "definition"):

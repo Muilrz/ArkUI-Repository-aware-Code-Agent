@@ -48,4 +48,4 @@ P3-A 的 `test_diff_parser.py` 具有独立可复现的 synthetic modify/add/del
 
 未标注维度必须明确为 unannotated（不写 `expected: []`）；经人工确认的空集才是 frozen empty，非适用维度为 N/A。当前不创建带空 expected 的可执行 fixture，不从 actual 输出反填 gold。P3 evidence 的归一化/重叠去重单位在 C1/D 首批人工冻结时确定。
 
-后续按 [P3 execution plan evaluation design](../exec-plans/active/P3-task-change-context.md#evaluation-design-and-acceptance-gates) 比较 direct retrieval/expansion、多个预算及失败分类；P3-A 不运行 retrieval、P2 baseline，也不改其 denominator 或 frozen expected。
+该历史评估设计见 [superseded P3 execution plan](../exec-plans/superseded/P3-task-change-context.md#evaluation-design-and-acceptance-gates)；P3-A 不运行 retrieval、P2 baseline，也不改其 denominator 或 frozen expected。

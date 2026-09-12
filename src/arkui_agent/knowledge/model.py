@@ -221,6 +221,7 @@ class BuildStatus(str, Enum):
     SUCCEEDED = "succeeded"
     BUILDING = "building"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ProvenanceStatus(str, Enum):
@@ -272,7 +273,7 @@ class BuildAttempt(Model):
             require(self.finished_at is None and self.failure is None, "Building attempt cannot be finished.")
         else:
             require(self.finished_at is not None and timestamp(self.finished_at) >= start, "Invalid finish time.")
-            require((self.failure is not None) == (self.status is BuildStatus.FAILED), "Invalid failure metadata.")
+            require((self.failure is not None) == (self.status in (BuildStatus.FAILED, BuildStatus.CANCELLED)), "Invalid failure metadata.")
 
 
 @dataclass(frozen=True, slots=True)

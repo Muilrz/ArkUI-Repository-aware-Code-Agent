@@ -17,9 +17,11 @@ P3-B 的 authoritative contract。公开入口为 `arkui_agent.knowledge`；P3-A
 | `KnowledgeArtifacts` | symbols/tests/graph/domain 四个固定角色，以及 TextKnowledge；不能用任意 dict 代替 |
 | `TextKnowledge` | identity、SnapshotIdentity、source digest、reader version；P1 text 当前读取 source workspace，不虚构持久化 text database |
 | `SnapshotBuild` | attempt_id、status、built_at、producer、provenance=verified_build/unverified、构建所使用的 source digest |
-| `BuildAttempt` | attempt_id、target SnapshotIdentity、status=succeeded/building/failed、reason、started_at、finished_at、failure |
+| `BuildAttempt` | attempt_id、target SnapshotIdentity、status=succeeded/building/failed/cancelled、reason、started_at、finished_at、failure |
 
-时间为带时区的 ISO-8601；结束时间不得早于开始时间。building 没有 finished_at/failure，failed 必须有 failure。last_usable 的 build 必须 succeeded；最新 succeeded 必须匹配 last_usable 的 identity/attempt_id，built_at 在该 attempt 时间范围内。新的 building/failed attempt 必须使用不同 generation，不得覆盖旧 generation。
+时间为带时区的 ISO-8601；结束时间不得早于开始时间。building 没有 finished_at/failure，failed/cancelled 必须有 finished_at/failure。cancelled 是明确的用户取消状态，不是普通 provider failure；它不能成为 last_usable。last_usable 的 build 必须 succeeded；最新 succeeded 必须匹配 last_usable 的 identity/attempt_id，built_at 在该 attempt 时间范围内。新的 building/failed/cancelled attempt 必须使用不同 generation，不得覆盖旧 generation。
+
+cancelled 的整体 freshness 映射到既有 failed（保留 typed latest_attempt.status=cancelled），snapshot_state 仍独立检查旧 snapshot；不能新 bind 或 no-op，已绑定 session 不受后续取消影响。wire envelope 不新增字段；旧 reader 不认识 cancelled 时须按未知 enum 拒绝，不能退化为 fresh。
 
 P1 symbol/test 共用同一个 sealed SQLite 文件、hash、schema version；分别保留知识角色 identity。P2 Graph 的 identity 对应其已有 snapshot_key，DomainMap 的 snapshot_key 必须匹配 Graph，ruleset_identity 必须匹配 configuration。**snapshot_key 是 artifact scope key，不是 Git revision 的证明。** artifact 的 repository/revision/generation/snapshot_id 必须与 KnowledgeSnapshot 完全一致。跨 generation 不作兼容猜测。
 

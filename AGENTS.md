@@ -1,6 +1,6 @@
-# ArkUI Repository-aware Code Agent
+# ArkUI Repository-aware Code Review Service
 
-本项目旨在构建面向 OpenHarmony ArkUI Ace Engine 的 multi-capability Repository-aware Engineering Agent。Repository Intelligence、ArkUI Code Graph、Task / Change Context 与 Agent Runtime 是共享基础设施；Code Review 和 UT Development / Repair 是第一批上层 Engineering Capabilities。
+本项目面向 OpenHarmony ArkUI Ace Engine，构建独立的 **Repository-aware Code Review Service**、**Repository Knowledge Service**、**MCP Server** 与供外部 Agent 使用的 **Code Review Skill**。系统不建设通用 Agent Runtime；自动轮询、review state、知识更新和结果持久化属于 Service，不属于 Skill 或外部 Agent。
 
 ## Source of Truth
 
@@ -12,67 +12,98 @@
 
 - `docs/exec-plans/phase-map.md`
 
-当前正在执行的开发计划：
+当前正在执行或待执行的开发计划：
 
 - `docs/exec-plans/active/`
 
-当长期技术路线、Phase Map 与当前执行计划存在层级差异时，按以下优先级理解：
+已结束和被路线替代的计划分别保存在：
 
-1. `technical-roadmap.md` 决定长期架构目标与核心技术方向；
-2. `phase-map.md` 决定工程开发阶段边界；
-3. `active/` 下的 execution plan 决定当前具体实现范围与验收标准。
+- `docs/exec-plans/completed/`
+- `docs/exec-plans/superseded/`
 
-不要自行用新的总体架构替换这些文档中的既定设计。若发现文档之间存在实际冲突，应在实现前明确指出。
+当文档存在层级差异时，按以下优先级理解：
+
+1. `technical-roadmap.md` 决定长期产品目标、核心架构与依赖方向；
+2. `phase-map.md` 决定开发阶段边界与 Definition of Done；
+3. `active/` 下的 execution plan 决定当前具体实现范围与验收标准；
+4. `specs/` 记录当前代码已经实现的 contract，不因未来架构迁移而自动改变历史事实。
+
+不要自行用新的总体架构替换这些文档中的既定设计。若发现实际冲突，应在实现前明确指出。
 
 ### Documentation Authority
 
-文档按以下职责维护，避免在多处重复定义同一行为：
+- `docs/architecture/`：长期结构、模块职责、依赖方向和架构边界；不记录源码行号或逐次测试日志。
+- `docs/specs/`：当前已实现能力的规范行为、接口、不变量和失败语义。未来架构只有在实现完成后才进入 spec。
+- `docs/exec-plans/phase-map.md`：Phase 边界与 Definition of Done。
+- `docs/exec-plans/active/`：当前变更的目标、范围、交付物、Acceptance Criteria 和状态。
+- `docs/exec-plans/completed/`：已完成计划。
+- `docs/exec-plans/superseded/`：未完成但已被产品或架构决定替代的计划。`Superseded` 不等于 `Completed`，其中已完成 milestone 仍是历史事实。
+- `tests/fixtures/`：与具体源码 revision 绑定的冻结 expected cases。
+- `docs/evaluation/`：baseline、benchmark、指标和跨 milestone 结果。
+- `docs/decisions/`：需要长期保留背景、选择与后果的架构决定。
 
-- `docs/architecture/` 说明长期结构、模块职责、依赖方向和架构边界；不记录源码行号、逐次测试结果或实现过程。
-- `docs/specs/` 定义当前已实现能力的规范行为、接口、不变量和失败语义。execution plan 只引用这些规范，不复制完整 contract。
-- `docs/exec-plans/phase-map.md` 定义 Phase 边界与 Definition of Done。
-- `docs/exec-plans/active/` 定义当前变更的目标、范围、交付物、Acceptance Criteria 和状态；完成记录保持简洁。
-- `docs/exec-plans/completed/` 保存已结束的执行计划。
-- `tests/fixtures/` 中的冻结 expected case 是具体源码验证预期的可执行来源；`docs/evaluation/` 保存跨 milestone 的 baseline 和指标说明。
-- `docs/decisions/` 记录需要长期保留背景、选择与后果的重要架构决定。
-
-当 active execution plan 有意修改既有行为时，它描述本次拟议变更；完成实现时必须同步更新对应 spec。若 spec 与 roadmap 或 phase boundary 冲突，以上层文档为准。代码与 spec 不一致应视为实现或文档缺陷，不通过复制一份新规则来规避。
+当 active plan 有意修改既有行为时，它描述拟议变更；完成实现时必须同步更新对应 spec。代码与 spec 不一致是实现或文档缺陷，不通过复制一份新规则规避。
 
 ## Current Development Scope
 
-已完成：
+历史基础：
 
-- P0 — Engineering Foundation
-- P1 — Repository Intelligence
-- P2 — ArkUI Code Graph（已通过最终验收，计划归档于 `docs/exec-plans/completed/`）
+- P0 — Engineering Foundation：Completed
+- P1 — Repository Intelligence：Completed，作为 `P1Provider` 被复用
+- P2 — ArkUI Code Graph：Completed，作为 `P2Provider` 被复用；frozen semantics、fixtures 和 baseline 不重写
+- P3-A～E：已完成 contract 继续保留为当前实现事实
+- 原 P3 后续路线：`Superseded`；不继续开发 P3-F incremental lifecycle、P4 Agent Runtime 或旧 P5 Engineering Agent 路线
 
-当前优先推进：
+新的产品开发路线使用独立编号：
 
-- P3 — Task / Change Retrieval & Context Builder 的规划与逐 milestone 开发，范围见 `docs/exec-plans/active/`。
+- R0 — Review Service Foundation
+- R1 — GitCode Integration & Review State
+- R2 — Repository Knowledge Service
+- R3 — Review Engine
+- R4 — MCP Server
+- R5 — Auto Review & Code Review Skill
+- R6 — Evaluation & Hardening
 
-当前 session 只整理 P2 收尾文档和 P3 execution plan，不实现 P3-A。后续仅在任务明确要求时实现对应 P3 milestone，不提前实现 P4 及后续 Phase。Code Review 新需求不得扩展已冻结的 P2 scope 或 baseline。
-
-开发任务应尽量以 milestone 为最小可验收单元，例如：
-
-- `P2-A`
-- `P2-B`
-- `P2-C`
-
-若 milestone 仍过大，可以继续拆成如 `P2-C1`、`P2-C2` 的更小 Codex task。
+当前 active plan 是 `docs/exec-plans/active/R0-review-service-foundation.md`。只有任务明确要求实现相应 milestone 时才修改产品代码；不得因计划已存在而提前实现 R0 或后续阶段。
 
 ## Core Architecture Boundaries
 
-- Repository Intelligence 不依赖 LLM。
-- Parser / semantic backend 必须与 indexing / retrieval API 解耦。
-- Repository-derived persistent knowledge 应沉淀在 index / graph / metadata / knowledge snapshot 中，而不是长期 LLM memory。
-- P1/P2/P3/P4 是多个 Engineering Capabilities 共享的基础设施；不得为 Code Review、UT 或后续 capability 分别复制 repository index、ArkUI graph 或 context pipeline。
-- P3 负责 Task / Change Retrieval、Knowledge Snapshot/Freshness、Task/Change-driven Graph Expansion、Context Ranking 与 Context Pack；Task/Change candidate retrieval 与最终 context selection 应保持职责分离。
-- P4 Agent Runtime 负责通用 planning、Tool/Skill invocation、state、observation、retry、stop condition 与 execution trace；P5 才实现 Code Review、UT Development/Repair 等具体 Engineering workflow。
-- Skill 负责描述如何组合 Tool 完成工程任务；周期 polling、平台事件、Repository Knowledge 长期存储不得塞进 Skill 或 LLM memory。
-- GitCode 等外部 Code Host 必须隐藏在清晰的 provider/adapter 边界后；上层 Code Review reasoning 不依赖平台私有 API schema。
-- Repository Knowledge refresh 是共享平台能力，应支持显式 freshness 状态和可调用的 refresh entry point；Code Review/UT 不维护私有全仓知识副本。
-- Evaluation 从项目早期同步建设；P6 负责形成正式 benchmark、ablation 与 hardening，而不是等到 P6 才开始评估。
-- P2 负责 graph model、ArkUI framework-aware relation 和通用局部 graph traversal；Task/Change-driven Graph Expansion、Task Subgraph Extraction 与 Context Pack 属于 P3。
+### Code Review Service
+
+- Review identity 至少为 `repository + pr_id + head_sha + review_policy_version`。
+- `GitCodeProvider` 隔离平台私有 API；Review Engine 不依赖 GitCode schema。
+- PR Poller / Scheduler、review user filter、head SHA dedup、Review Job Manager 和 Result Store 都属于 Service。
+- 第一阶段重点 review category 为 Stability、Memory / Resource / Lifetime、Functional Correctness。
+- Review 允许成功地产生 zero findings；无证据不得制造 finding。
+
+### Repository Knowledge Service
+
+Repository Knowledge 是 provider-based service，不要求维护统一 `KnowledgeSnapshot` 或 generation：
+
+- `DocsKbProvider`：ArkUI docs/kb、`context_registry`、`kb_search`，提供架构、组件和领域知识。
+- `LiveSourceProvider`：`rg` / Git / filesystem，读取当前 PR revision 的真实源码，是源码事实的最终 source of truth。
+- `P1Provider`：复用 P1 symbol / definition / reference / caller / callee / tests。
+- `P2Provider`：复用 P2 ArkUI-specific framework semantic relations。
+
+P1/P2 stale、unavailable 或 refresh 失败时不得阻塞 review；Review 必须可降级为 `Docs + Live Source`。旧 revision 的 P1/P2 facts 不能作为当前 revision 的确定事实。
+
+Freshness 以 provider 为单位报告，至少包含目标 `repository_revision` 以及每个 provider 的 `status`、`revision` 和必要 diagnostics。允许 provider 分别 refresh；不得以统一 snapshot readiness 作为 review 的硬门槛。
+
+未来可以增加 `SemanticMcpProvider`，但当前架构、contract、测试和可用性不能依赖它。
+
+### MCP and Skill
+
+- MCP Server 只是 Code Review Service 与 Repository Knowledge Service 的标准接口层，不实现 planning、agent loop、长期 memory 或通用 Agent Runtime。
+- Code Review Skill 只告诉 Codex、Claude 或其他 Agent 如何组合 MCP tools，不能承载 polling、scheduler、dedup、知识持久化或 review result storage。
+- 自动检视固定属于 Service：`Scheduler → GitCodeProvider → author filter → head SHA dedup → review → persist`。
+- 外部 Agent 可消费 MCP，但 Service 的正确性和自动检视生命周期不依赖外部 Agent 自己维持后台循环。
+
+### Historical P1/P2/P3 Contracts
+
+- P1/P2 不删除、不重写既有 frozen semantics。
+- P1/P2 specs、baseline 与 frozen fixtures 是已实现历史事实。
+- 已实现 P3-A～E specs/evaluation 继续保留；新架构可以复用其能力，但不把它们追溯改写为新 Service contract。
+- 原 dependency-driven incremental knowledge、TU invalidation、semantic shard、fact ownership、P1 delta、P2 incremental projection、KnowledgeSnapshot generation 和 SnapshotQueryView 不是新产品必选主线。历史实现和文档可以保留，但不能被描述为当前路线要求。
 
 ## Target Repository
 
@@ -86,11 +117,10 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 
 ## Development Rules
 
-- 保持 patch 小且可审查。
-- 不做与当前任务无关的重构。
+- 保持 patch 小且可审查，不做无关重构。
 - 不提前实现后续 milestone。
 - 行为变更必须新增或更新测试。
-- 外部工具集成应隐藏在清晰的 adapter / provider 边界后。
+- 外部工具集成隐藏在清晰的 adapter / provider 边界后。
 - Python 接口优先使用明确的数据类型与 type hints。
 - 不使用 broad exception handling 隐藏失败。
 - 不通过绕过真实行为的 mock 让测试“假通过”。
@@ -105,49 +135,24 @@ ArkUI Ace Engine 是外部 target repository，不属于本项目源码。
 4. Hook 不可用或未 trusted 时必须明确报告本次未验证，不得以手动 full 自动补跑；
 5. 报告 Hook 实际结果、未验证项、修改文件、重要决定和可 review diff。
 
-若存在必需测试失败，不得宣称任务完成。
+纯文档任务按任务要求执行 Markdown/link/diff 检查，不主动运行产品测试。若存在必需测试失败，不得宣称任务完成。
 
 ## Execution Plan Updates
 
-执行 milestone 时：
-
-- 开始开发：将该 milestone Status 设为 `In Progress`；
-- 仅当 Acceptance Criteria 与测试全部通过后：设为 `Completed`；
-- 存在未完成项或失败测试：保持 `In Progress`；
+- 开始开发：将对应 milestone Status 设为 `In Progress`。
+- 仅当 Acceptance Criteria 与必需测试全部通过：设为 `Completed`。
+- 存在未完成项或失败测试：保持 `In Progress`。
+- 路线被新产品或架构决定替代且未完成：设为 `Superseded` 并移动到 `docs/exec-plans/superseded/`；不得标记 `Completed`。
 - 不得顺手修改其他 milestone 状态。
-
-完成的 execution plan 可从：
-
-- `docs/exec-plans/active/`
-
-移动到：
-
-- `docs/exec-plans/completed/`
 
 ## Git and Generated Data
 
-不要提交：
-
-- Python cache；
-- virtual environment；
-- build output；
-- SQLite / database / index files；
-- runtime cache；
-- `var/` 下运行时数据；
-- target repository 派生数据；
-- `compile_commands.json` 等大型外部构建派生产物。
-
-不要重写既有 Git history。
+不要提交 Python cache、virtual environment、build output、SQLite/database/index、runtime cache、`var/` 运行数据、target repository 派生数据或 `compile_commands.json` 等大型外部构建产物。不要重写既有 Git history。
 
 ### Runtime Artifact Discipline
 
-- 不要为每个 milestone 自动生成或长期保存独立 `.patch`、diff snapshot、`before` snapshot、`code-freeze` 文件或逐命令测试日志。
-- Code review 默认使用当前 Git 状态与 `git diff` / `git diff --check`；仅当任务明确要求导出 patch 时才创建 `.patch` 文件。
-- 开发过程中的 probe、临时诊断结果和中间测试输出默认只用于当前执行，不持久化到 `var/`。
-- `var/` 只保留确有工程用途、可由明确项目流程消费的运行产物，例如：
-  - evaluation / benchmark 输出；
-  - Symbol Index、Graph snapshot、Knowledge Snapshot 等明确设计为可重建的 runtime data；
-  - Stop Hook 使用的最新 validation 结果；
-  - execution plan 或测试明确要求用于真实仓库验收的机器可读 smoke / validation report。
-- 如果最终报告中的文字即可完整表达验证结果，则不要额外生成同内容的 JSON / log 文件。
-- 所有 `var/` 运行产物均视为可重建数据，不应提交 Git，除非项目文档明确规定例外。
+- 不为每个 milestone 自动保存 `.patch`、diff/before snapshot、code-freeze 文件或逐命令测试日志。
+- Code review 默认使用当前 Git 状态与 `git diff` / `git diff --check`；仅在任务明确要求时导出 patch。
+- probe、临时诊断和中间测试输出默认不持久化到 `var/`。
+- `var/` 只保留明确项目流程会消费的可重建产物，例如 evaluation 输出、P1/P2 index/graph data、provider cache/status 或 Stop Hook 最新结果。
+- 若最终报告文字可完整表达验证结果，不额外生成同内容 JSON/log。

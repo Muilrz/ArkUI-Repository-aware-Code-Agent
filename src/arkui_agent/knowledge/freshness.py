@@ -109,7 +109,7 @@ def evaluate_freshness(manifest: KnowledgeManifest, requirement: QueryRequiremen
     if attempt is not None and attempt.status is BuildStatus.BUILDING:
         state = Freshness.BUILDING
         issue(Reason.LATEST_BUILDING, "Latest generation is still building; last usable remains separate.")
-    elif attempt is not None and attempt.status is BuildStatus.FAILED:
+    elif attempt is not None and attempt.status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
         state = Freshness.FAILED
         issue(Reason.LATEST_FAILED, attempt.failure or "Latest build failed.")
     return FreshnessResult(state, snapshot_state, coverage, None if snapshot is None else snapshot.identity,
